@@ -1,0 +1,46 @@
+# Runs the job agent for every onboarded user: scan → score → tailor → apply.
+# Free on GitHub Actions. Browsers are hosted on Browserbase (nothing self-hosted).
+name: Job agent
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Fill forms but don't submit"
+        type: boolean
+        default: true
+
+concurrency:
+  group: job-agent
+  cancel-in-progress: false
+
+jobs:
+  cycle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: agent/package-lock.json
+      - run: npm ci
+      - name: Agent cycle
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          BROWSERBASE_API_KEY: ${{ secrets.BROWSERBASE_API_KEY }}
+          BROWSERBASE_PROJECT_ID: ${{ secrets.BROWSERBASE_PROJECT_ID }}
+          MODEL_API_KEY: ${{ secrets.MODEL_API_KEY }}
+          ADZUNA_APP_ID: ${{ secrets.ADZUNA_APP_ID }}
+          ADZUNA_APP_KEY: ${{ secrets.ADZUNA_APP_KEY }}
+          # Scheduled runs use the repo variable DRY_RUN (set it to "false" to go live);
+          # manual runs use the checkbox.
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || vars.DRY_RUN || 'true' }}
+          MAX_APPLY_PER_RUN: ${{ vars.MAX_APPLY_PER_RUN || '2' }}
+        run: npm run cycle
