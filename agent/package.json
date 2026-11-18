@@ -1,0 +1,27 @@
+{
+  "name": "job-agent-service",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "Hosted-browser agent: Stagehand + Browserbase. No self-hosted browsers.",
+  "scripts": {
+    "check": "tsx --env-file-if-exists=.env src/check.ts",
+    "cycle": "tsx src/run.ts",
+    "cycle:local": "tsx --env-file-if-exists=.env src/run.ts",
+    "typecheck": "tsc --noEmit -p ."
+  },
+  "dependencies": {
+    "@browserbasehq/sdk": "^2.28.0",
+    "@browserbasehq/stagehand": "^4.4.0",
+    "@google/genai": "^3.6.0",
+    "firebase-admin": "^14.5.1",
+    "pdf-lib": "^1.17.1",
+    "unpdf": "^2.2.1",
+    "zod": "4.6.6"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

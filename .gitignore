@@ -1,0 +1,21 @@
+# Personal data — never commit (repo is public for free GitHub Pages)
+data/
+
+# Secrets & sessions
+.env
+.env.*
+!.env.example
+**/service-account*.json
+worker/profiles/
+worker/tmp/
+
+# Build / caches / logs
+node_modules/
+dist/
+.cache/
+.firebase/
+.vercel/
+*.log
+firestore-debug.log
+ui-debug.log
+.claude/
