@@ -66,7 +66,7 @@ const DECLINE_RE = /prefer not|decline|don'?t wish|do not wish|not wish to|choos
  * Answer common fields without the model. Returns null when the field is not one of the
  * handled kinds (or the data needed is missing in a way the model might still resolve).
  */
-export function answerDeterministic({ field, profile, facts }: FieldInput): FieldAnswer | null {
+export function answerDeterministic({ field, profile, facts, job }: FieldInput): FieldAnswer | null {
   const label = lc(field.label);
   const std = profile.standardAnswers ?? {};
   const nameParts = profile.fullName.trim().split(/\s+/);
@@ -75,6 +75,19 @@ export function answerDeterministic({ field, profile, facts }: FieldInput): Fiel
     if (/cover/.test(label)) return ans("cover_letter", 1, ["file upload: cover letter"]);
     if (/resume|résumé|\bcv\b|curriculum/.test(label)) return ans("resume", 1, ["file upload: resume"]);
     return ans("", 0, ["unknown file upload"]);
+  }
+
+  // "Have you (previously) worked for <this company>?" → answered from work history.
+  const company = lc(job.company ?? "").replace(/[^a-z0-9 ]/g, "").trim();
+  if (company && /(work|employ|intern)/.test(label) && /(previous|current|ever|before|in the past|former)/.test(label) && (label.includes(company) || /\b(us|our company|this company)\b/.test(label))) {
+    const history = [
+      ...(profile.masterResume?.structured?.experience ?? []).map((e) => lc(e.company)),
+      ...facts.map(lc),
+    ].join(" | ");
+    if (!history.includes(company)) {
+      const no = field.options?.find((o) => /^no\b/i.test(o.trim())) ?? (field.options?.length ? undefined : "No");
+      if (no) return ans(no, 0.9, [`${job.company} is not in your work history`]);
+    }
   }
 
   // EEO / demographic → decline

@@ -43,4 +43,6 @@ jobs:
           # manual runs use the checkbox.
           DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || vars.DRY_RUN || 'true' }}
           MAX_APPLY_PER_RUN: ${{ vars.MAX_APPLY_PER_RUN || '2' }}
+          GEMINI_MODELS: ${{ vars.GEMINI_MODELS }}
+          STAGEHAND_MODEL: google/gemini-flash-latest
         run: npm run cycle

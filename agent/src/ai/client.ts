@@ -17,7 +17,25 @@ export function hasModelKey(): boolean {
 }
 
 export function modelName(): string {
-  return process.env.GEMINI_MODEL || "gemini-2.5-flash";
+  return activeModels()[0] ?? MODEL_CHAIN[0]!;
+}
+
+/**
+ * Free-tier quotas are per model per day, so we walk a chain of models and skip any that hit
+ * their daily limit. Override with GEMINI_MODELS="a,b,c" (or a single GEMINI_MODEL).
+ */
+const MODEL_CHAIN = (process.env.GEMINI_MODELS || process.env.GEMINI_MODEL || "gemini-flash-latest,gemini-3.5-flash,gemini-flash-lite-latest,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.5-flash-lite")
+  .split(",").map((s) => s.trim()).filter(Boolean);
+const exhausted = new Set<string>();
+function activeModels() {
+  return MODEL_CHAIN.filter((m) => !exhausted.has(m));
+}
+function isDailyQuota(err: unknown) {
+  const m = String((err as { message?: unknown })?.message ?? "");
+  return /PerDay|per day|RESOURCE_EXHAUSTED/i.test(m) && /quota/i.test(m);
+}
+function isUnavailableModel(err: unknown) {
+  return statusOf(err) === 404;
 }
 
 let client: GoogleGenAI | null = null;
@@ -25,7 +43,8 @@ function getClient(): GoogleGenAI {
   if (client) return client;
   const apiKey = process.env.MODEL_API_KEY;
   if (!apiKey) throw new Error("Missing MODEL_API_KEY (Google AI Studio key). Add it to agent/.env.");
-  client = new GoogleGenAI({ apiKey });
+  // JSON mode (responseMimeType/responseJsonSchema) is only enabled on v1beta.
+  client = new GoogleGenAI({ apiKey, apiVersion: "v1beta" });
   return client;
 }
 
@@ -101,6 +120,15 @@ async function callModel(args: {
       return text;
     } catch (err) {
       lastErr = err;
+      // Daily free quota used up (or model retired) → switch to the next model immediately.
+      if (isDailyQuota(err) || isUnavailableModel(err)) {
+        const m = modelName();
+        exhausted.add(m);
+        console.warn(`[ai] ${m} unavailable (${isDailyQuota(err) ? "daily quota reached" : "not available"}); switching to ${activeModels()[0] ?? "none"}`);
+        if (!activeModels().length) break;
+        attempt--; // don't count a model switch as a retry
+        continue;
+      }
       const status = statusOf(err);
       const retryable = status === 429 || status === 503 || status === 500;
       if (!retryable || attempt === MAX_TRIES) break;
