@@ -166,7 +166,8 @@ async function runUser(uid: string) {
     try {
       const s = await ai.scoreJob({ resumeText: resume.text, facts, settings, job: j });
       const patch: Partial<Job> = { score: { master: s.score, reasons: s.reasons }, gaps: s.gaps };
-      if (s.questions.length && s.score >= settings.thresholds.tailor) {
+      // Questions only hold back borderline jobs; a job that already clears the apply bar goes ahead.
+      if (s.questions.length && s.score >= settings.thresholds.tailor && s.score < settings.thresholds.apply) {
         const qids = await upsertQuestions(db, s.questions, j.id, "scoring");
         await setStatus(db, j, "waiting_input", { ...patch, questionIds: qids });
         await db.log("warn", "question", `Needs your input for ${j.title} at ${j.company}`, j.id);
@@ -234,6 +235,7 @@ async function runUser(uid: string) {
 
     const res = await applyTo({
       job: j, profile, facts: await db.list("facts"), resumePdfPath: resumePath, coverLetter, contextId, dryRun: DRY_RUN,
+      acceptRequiredConsent: !!settings.consent?.acceptRequired,
       answer: (field) => ai.answerField({ field, profile, facts, job: j }),
     });
     fs.rmSync(tmp, { recursive: true, force: true });
@@ -246,6 +248,11 @@ async function runUser(uid: string) {
         await db.log("success", "applied", `Applied to ${j.title} at ${j.company}`, j.id);
         today[site]++;
       } else {
+        // Keep a reviewable copy of what would have been sent.
+        const out = path.join(os.tmpdir(), `dryrun-${j.id}`);
+        fs.writeFileSync(`${out}.json`, JSON.stringify({ job: `${j.title} @ ${j.company}`, url: j.applyUrl, answers: res.answers, coverLetter: coverLetter?.text }, null, 2));
+        if (res.screenshot) fs.writeFileSync(`${out}.jpg`, res.screenshot);
+        console.log(`  dry-run review: ${out}.json / .jpg`);
         await setStatus(db, j, "ready", { error: "" });
         await db.log("info", "dry_run", `Dry run OK for ${j.title} at ${j.company} — form filled, not submitted (DRY_RUN is on)`, j.id);
       }

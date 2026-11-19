@@ -40,6 +40,7 @@ export const JOB_SITES: JobSite[] = [
   { id: "wellfound", name: "Wellfound (startups)", url: "https://wellfound.com/jobs", regions: ["GLOBAL", "US"], kind: "browser", apply: "assisted", needsLogin: true, focus: ["startup"] },
   { id: "dribbble", name: "Dribbble Jobs", url: "https://dribbble.com/jobs", regions: ["GLOBAL", "REMOTE"], kind: "browser", apply: "assisted", needsLogin: false, focus: ["design"] },
   { id: "behance", name: "Behance Jobs", url: "https://www.behance.net/joblist", regions: ["GLOBAL", "REMOTE"], kind: "browser", apply: "monitor", needsLogin: true, focus: ["design"] },
+  { id: "arbeitnow", name: "Arbeitnow", url: "https://www.arbeitnow.com", regions: ["DE", "NL", "AT", "CH", "BE", "FR", "ES", "IT", "PL", "IE", "SE", "DK", "PT", "GB"], kind: "api", apply: "assisted", needsLogin: false, note: "European jobs, many tagged with visa sponsorship." },
   { id: "adzuna", name: "Adzuna", url: "https://www.adzuna.com", regions: ["GB", "US", "CA", "AU", "DE", "FR", "IN", "ZA", "NL", "IT", "ES", "PL", "SG", "BR", "MX", "NZ", "AT", "CH", "BE"], kind: "api", apply: "assisted", needsLogin: false, note: "Large aggregator. Needs a free API key on the scanner." },
 
   // ---------- Remote ----------

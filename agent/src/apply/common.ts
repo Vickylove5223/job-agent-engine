@@ -1228,8 +1228,40 @@ export async function submitApplication(ctx: Ctx, spec: SubmitSpec): Promise<App
     ctx.log(`submit via observe: ${action.description}`);
     await ctx.stagehand.act(action, { page: ctx.page });
   }
-  return confirmSubmitted(ctx, spec, { text: beforeText, url: beforeUrl });
+  const first = await confirmSubmitted(ctx, spec, { text: beforeText, url: beforeUrl });
+
+  // The user allowed ticking REQUIRED consent boxes: only after the form rejected the submission
+  // for a missing required entry do we tick unchecked consent/privacy checkboxes and resubmit once.
+  if (first.status === "failed" && ctx.input.acceptRequiredConsent && /required|missing|corrections|invalid/i.test(first.error ?? "")) {
+    const ticked = await ctx.page.evaluate<string[]>(TICK_CONSENT).catch(() => [] as string[]);
+    if (ticked.length) {
+      ctx.log(`ticked required consent: ${ticked.map((t) => `"${t.slice(0, 60)}…"`).join(", ")}`);
+      const again = selector ?? (await findButton(ctx, spec.text, spec.scope))?.selector ?? null;
+      if (again) {
+        await clickSelector(ctx, again);
+        const second = await confirmSubmitted(ctx, spec, { text: beforeText, url: beforeUrl });
+        second.answers.push(...ticked.map((t) => ({ question: t.slice(0, 200), answer: "checked (required consent)", basis: ["settings.consent.acceptRequired"] })));
+        return second;
+      }
+    }
+  }
+  return first;
 }
+
+/** Ticks unchecked checkboxes whose label reads like a data-processing / privacy consent. Returns their labels. */
+const TICK_CONSENT = `(() => {
+  const RE = /(consent|privacy|personal data|data protection|gdpr|recruitment policy|terms|agree|processing of my)/i;
+  const out = [];
+  for (const cb of Array.from(document.querySelectorAll('input[type=checkbox]'))) {
+    if (cb.checked || cb.disabled) continue;
+    const label = (cb.labels && cb.labels[0] && cb.labels[0].innerText) || (cb.closest('label, div, li') || cb.parentElement || {}).innerText || '';
+    if (!RE.test(label)) continue;
+    cb.click();
+    if (!cb.checked) { cb.checked = true; cb.dispatchEvent(new Event('change', { bubbles: true })); }
+    out.push(label.trim());
+  }
+  return out;
+})()`;
 
 /** Poll for the success state after a submit click. */
 export async function confirmSubmitted(ctx: Ctx, spec: SubmitSpec, before = { text: "", url: "" }): Promise<ApplyResult> {

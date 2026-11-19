@@ -2,6 +2,7 @@
 import type { Settings } from "@shared/types";
 import type { JobSource, RawJob } from "../contracts";
 import { adzuna } from "./adzuna";
+import { arbeitnow } from "./arbeitnow";
 import { ashby } from "./ashby";
 import { hardFilter } from "./filter";
 import { greenhouse } from "./greenhouse";
@@ -17,7 +18,7 @@ export { hardFilter, titleMatches } from "./filter";
 export { BOARDS, boardsFor } from "./companies";
 
 /** Ordered by preference: when the same job appears twice, the earlier source wins (direct ATS first). */
-export const ALL_SOURCES: JobSource[] = [greenhouse, lever, ashby, workable, himalayas, remotive, weworkremotely, remoteok, adzuna];
+export const ALL_SOURCES: JobSource[] = [greenhouse, lever, ashby, workable, arbeitnow, himalayas, remotive, weworkremotely, remoteok, adzuna];
 
 export const SOURCE_IDS = ALL_SOURCES.map((s) => s.id);
 

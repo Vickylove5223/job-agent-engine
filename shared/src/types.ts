@@ -55,6 +55,8 @@ export interface Settings {
   sources?: Partial<Record<JobSource, boolean>>;
   targetCompanies: { ats: "greenhouse" | "lever" | "ashby"; slug: string; name: string }[];
   coverLetter: { mode: "when_required" | "always"; tone: "professional" | "warm" | "concise" };
+  /** acceptRequired: tick consent/privacy checkboxes only when the form requires them to apply */
+  consent?: { acceptRequired: boolean };
 }
 
 export interface ResumeExperience {

@@ -79,6 +79,8 @@ export interface ApplyInput {
   answer: (field: FieldQuestion) => Promise<FieldAnswer>;
   /** fill everything, screenshot, but never click the final submit */
   dryRun: boolean;
+  /** user allowed ticking data-processing consent boxes that the form REQUIRES (never optional ones) */
+  acceptRequiredConsent?: boolean;
 }
 
 export interface ApplyResult {
