@@ -217,6 +217,12 @@ Hard rules:
 - Job says no visa sponsorship / must already be authorized AND a fact says the candidate needs sponsorship
   (or is not authorized there) → score ≤ 30 and a reason saying so. If authorization for the job's country is
   unknown and the job requires it → ask (yes_no) unless a fact already answers it.
+- If the job does NOT explicitly rule out sponsorship, needing sponsorship is NOT a penalty at all: do not lower
+  the score for it and do not list it as a blocker. The candidate deliberately targets employers who sponsor
+  (e.g. recognised sponsors under the Dutch Highly Skilled Migrant scheme); the application decides it.
+- Do not penalise a non-design degree when the job says "or equivalent experience" or lists the degree as
+  preferred/nice-to-have; years of relevant work count as equivalent.
+- Nice-to-have / "bonus" items are never hard requirements: missing them costs at most a few points.
 - Job requires fluency in a language (e.g. "fluent Dutch required") and neither resume nor facts show it →
   big penalty (score ≤ 40) and ask "Do you speak <language>?" unless already answered in the facts.
 - Location/work mode incompatible with the candidate's preferences and not remote → penalty.

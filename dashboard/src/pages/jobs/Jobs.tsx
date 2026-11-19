@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { ArrowDown, ArrowUp, ArrowUpDown, Briefcase, Download, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Briefcase, Search } from "lucide-react";
 import type { Job, JobSource, JobStatus, WithId } from "@shared/types";
 import { useCollection } from "@/lib/db";
 import { formatSalary, timeAgo } from "@/lib/format";
@@ -8,7 +8,6 @@ import {
   Badge, Button, EmptyState, Input, LoadingBlock, PageHeader, Select, Switch, Table, Tabs, Td, Th, Tr, cx,
 } from "@/components/ui";
 import { ScoreRing, SourceLabel, StatusBadge, sourceName } from "@/components/domain";
-import { downloadJobsCsv } from "./csv";
 import { JobDrawer } from "./JobDrawer";
 
 type TabKey = "all" | "ready" | "waiting_input" | "needs_tailoring" | "applying" | "applied" | "skipped" | "problems";
@@ -105,11 +104,6 @@ export function Jobs() {
     <PageHeader
       title="Jobs"
       description="Every job the agent found, scored against your resume."
-      actions={
-        <Button variant="secondary" icon={<Download className="size-4" />} onClick={() => downloadJobsCsv(filtered)} disabled={!filtered.length}>
-          Export CSV
-        </Button>
-      }
     />
   );
 

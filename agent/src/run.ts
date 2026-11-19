@@ -17,6 +17,7 @@ import { canTransition } from "@shared/status";
 import { nowIso, onboardedUserIds, userDb, type UserDb } from "./db";
 import type { RawJob, ScoreResult } from "./contracts";
 import { scanAll } from "./sources/index";
+import { hardFilter } from "./sources/filter";
 import { ai } from "./ai/index";
 import { applyTo } from "./apply/index";
 import { renderCoverLetterPdf, renderResumePdf } from "./pdf";
@@ -136,6 +137,27 @@ async function runUser(uid: string) {
     const errs = res.errors.length ? ` (${res.errors.length} source errors)` : "";
     await db.log("info", "scan", `Scanned ${Object.keys(res.counts).length} sources: ${res.jobs.length} matching, ${added} new${errs}`);
     console.log(`  scan: ${res.jobs.length} matching, ${added} new, errors: ${res.errors.map((e) => e.source).join(",") || "none"}`);
+  }
+
+  // 2b) Re-apply the filters to jobs not yet applied to, so changes to the user's
+  //     locations/roles/seniority take effect on already-found jobs too.
+  for (const st of ["new", "needs_tailoring", "ready", "waiting_input"] as const) {
+    for (const j of await db.list("jobs", ["status", "==", st])) {
+      const f = hardFilter(j as unknown as RawJob, settings);
+      if (!f.keep) await db.update("jobs", j.id, { status: "skipped", skipReason: `Filtered: ${f.reason}`, updatedAt: nowIso() });
+    }
+  }
+
+  // 2c) Drop job questions whose jobs are all gone (filtered/skipped) — never ask about jobs
+  //     the user no longer wants. Setup/profile questions are kept.
+  {
+    const active = new Set(
+      (await db.list("jobs")).filter((j) => ["new", "scored", "needs_tailoring", "waiting_input", "ready", "applying"].includes(j.status)).map((j) => j.id),
+    );
+    for (const q of await db.list("questions", ["status", "==", "open"])) {
+      if (q.origin === "profile" || !q.jobIds?.length) continue;
+      if (!q.jobIds.some((id) => active.has(id))) await db.update("questions", q.id, { status: "dismissed" });
+    }
   }
 
   // 3) Score new jobs.

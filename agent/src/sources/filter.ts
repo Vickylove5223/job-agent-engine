@@ -283,28 +283,21 @@ export function locationReason(raw: RawJob, settings: Settings): string | undefi
     return wantsOnsite ? undefined : "not remote";
   }
 
-  const userMatch = countries.map((c) => countryMatches(loc, c, true)).find(Boolean);
+  // STRICT: the posting's location must explicitly name one of the user's countries (or a city in
+  // them). Broad regions ("Europe", "EMEA"), "Anywhere/Worldwide", and long all-countries lists
+  // don't count — the user only wants jobs in the places they chose.
+  const strict = countries.some((c) => countryMatches(loc, c, false));
+  if (!strict) return loc ? `location "${truncLoc(loc)}" not in ${countries.join("/")}` : "no location given";
+  const places = loc.split(/[;|,]/).map((s) => s.trim()).filter(Boolean);
+  if (places.length > 12 || WORLDWIDE_RE.test(loc)) return "worldwide posting, not specific to your countries";
 
   // explicit "US only" style restriction anywhere near the top of the posting
   const restriction = regionRestriction(`${loc}\n${head}`, countries);
+  if (restriction) return `restricted: "${restriction}"`;
 
-  if (raw.remote && wantsRemote) {
-    if (userMatch) return restriction && !countries.some((c) => countryMatches(loc, c, false)) ? `remote, restricted: "${restriction}"` : undefined;
-    if (restriction) return `remote, restricted: "${restriction}"`;
-    const foreign = foreignPlaces(loc, countries);
-    if (!foreign.length || WORLDWIDE_RE.test(loc)) return undefined;
-    // location names only other places → the remote role is limited to them
-    return `remote, limited to ${foreign.slice(0, 3).join(", ")}`;
-  }
-
-  if (!wantsOnsite) return raw.remote ? "remote not selected" : "not remote";
-  if (!userMatch) {
-    // hybrid/on-site postings must name one of the user's countries or cities
-    return loc ? `location "${truncLoc(loc)}" not in ${countries.join("/")}` : "no location given";
-  }
-  // only countries/regions matched via a broad region (e.g. "Europe") are fine for remote, not on-site
-  const strict = countries.map((c) => countryMatches(loc, c, false)).find(Boolean);
-  if (!strict) return `on-site location "${truncLoc(loc)}" too broad`;
+  // work mode
+  if (raw.remote && !wantsRemote) return "remote job but remote not selected";
+  if (!raw.remote && !wantsOnsite) return "not remote";
 
   if (settings.locations?.length) {
     const prefs = settings.locations.map((l) => l.toLowerCase().trim()).filter(Boolean);
