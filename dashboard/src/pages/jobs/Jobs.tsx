@@ -7,7 +7,7 @@ import { formatSalary, timeAgo } from "@/lib/format";
 import {
   Badge, Button, EmptyState, Input, LoadingBlock, PageHeader, Select, Switch, Table, Tabs, Td, Th, Tr, cx,
 } from "@/components/ui";
-import { ScoreRing, SourceLabel, StatusBadge, sourceName } from "@/components/domain";
+import { ScoreRing, SourceLabel, StatusBadge, getSourceInfo, sourceName } from "@/components/domain";
 import { JobDrawer } from "./JobDrawer";
 
 type TabKey = "all" | "ready" | "waiting_input" | "needs_tailoring" | "applying" | "applied" | "skipped" | "problems";
@@ -183,7 +183,7 @@ export function Jobs() {
                         <StatusBadge status={j.status} />
                       </div>
                       <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-                        <SourceLabel source={j.source} />
+                        <SourceLabel source={j.source} url={getSourceInfo(j).url} />
                         <span className="truncate max-w-[12rem]">{j.location || "—"}</span>
                         {j.remote && <Badge tone="green">Remote</Badge>}
                         {j.salary && <span>{formatSalary(j.salary)}</span>}
@@ -221,7 +221,7 @@ export function Jobs() {
                         </div>
                         <div className="text-muted truncate">{j.company}</div>
                       </Td>
-                      <Td className="whitespace-nowrap"><SourceLabel source={j.source} /></Td>
+                      <Td className="whitespace-nowrap"><SourceLabel source={j.source} url={getSourceInfo(j).url} /></Td>
                       <Td className="max-w-[14rem]">
                         <div className="flex items-center gap-2">
                           <span className="truncate">{j.location || "—"}</span>

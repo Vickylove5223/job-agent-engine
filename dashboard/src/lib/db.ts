@@ -31,10 +31,14 @@ function createLocalBackend(): Backend {
   const listeners = new Set<() => void>();
   let timer: ReturnType<typeof setInterval> | null = null;
 
+  const dbUrl = (p: string) => (typeof window !== "undefined" ? p : `http://127.0.0.1:5180${p}`);
+
   const refresh = async () => {
-    const res = await fetch("/__db");
-    cache = await res.json();
-    listeners.forEach((l) => l());
+    try {
+      const res = await fetch(dbUrl("/__db"));
+      cache = await res.json();
+      listeners.forEach((l) => l());
+    } catch {}
   };
   const ensurePolling = () => {
     if (timer) return;
@@ -56,11 +60,13 @@ function createLocalBackend(): Backend {
       if (method === "DELETE") delete cache[col][id];
       listeners.forEach((l) => l());
     }
-    await fetch(`/__db/${encodeURIComponent(col)}/${encodeURIComponent(id)}`, {
-      method,
-      headers: { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    });
+    try {
+      await fetch(dbUrl(`/__db/${encodeURIComponent(col)}/${encodeURIComponent(id)}`), {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: body === undefined ? undefined : JSON.stringify(body),
+      });
+    } catch {}
   };
 
   return {
@@ -105,7 +111,8 @@ export function sortAndLimit<T>(docs: T[], opts: QueryOpts): T[] {
   return out;
 }
 
-const wantLocal = import.meta.env.DEV && (import.meta.env.VITE_DATA_BACKEND === "local" || !isFirebaseConfigured);
+const dataBackend = typeof import.meta !== "undefined" ? import.meta.env.VITE_DATA_BACKEND : (typeof process !== "undefined" ? process.env?.VITE_DATA_BACKEND : undefined);
+const wantLocal = !isFirebaseConfigured || dataBackend === "local";
 export const backend: Backend = wantLocal ? createLocalBackend() : firebaseBackend();
 
 // ---------- hooks ----------
@@ -140,6 +147,16 @@ export function useDoc<K extends CollectionName>(col: K, id: string | undefined)
   }, [col, id]);
   return { data, loading };
 }
+
+export function getCollectionOnce<K extends CollectionName>(col: K): Promise<WithId<Collections[K]>[]> {
+  return new Promise((resolve) => {
+    const unsub = backend.subscribeCollection(col, {}, (docs) => {
+      unsub();
+      resolve(docs);
+    });
+  });
+}
+export const getCollection = getCollectionOnce;
 
 // ---------- mutations ----------
 export const setDocument = <K extends CollectionName>(col: K, id: string, data: Collections[K]) => backend.set(col, id, data);

@@ -26,17 +26,17 @@ function SignedIn() {
   // New accounts go through the setup wizard first.
   if (!settings?.onboardedAt) return <Onboarding />;
   return (
-    <Routes>
-      <Route element={<AppShell />}>
-        <Route index element={<Overview />} />
-        <Route path="jobs" element={<Jobs />} />
-        <Route path="questions" element={<Questions />} />
-        <Route path="applications" element={<Applications />} />
-        <Route path="profile" element={<Profile />} />
-        <Route path="settings" element={<Settings />} />
-        <Route path="*" element={<Overview />} />
-      </Route>
-    </Routes>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route index element={<Overview />} />
+          <Route path="jobs" element={<Jobs />} />
+          <Route path="questions" element={<Questions />} />
+          <Route path="applications" element={<Applications />} />
+          <Route path="profile" element={<Profile />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="*" element={<Overview />} />
+        </Route>
+      </Routes>
   );
 }
 

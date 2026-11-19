@@ -14,6 +14,14 @@ import path from "node:path";
 import { createHash } from "node:crypto";
 import type { Fact, Job, Profile, Settings, WithId } from "@shared/types";
 import { canTransition } from "@shared/status";
+import { findAgenciesForLocations, prepareAgencySubmission, RECRUITMENT_AGENCIES_CATALOG } from "@shared/agencies";
+import {
+  DEFAULT_COLD_EMAIL_TEMPLATES,
+  detectCountryCode,
+  isCompanyMatchingLocation,
+  prepareColdEmailRecord,
+  searchCompaniesByNicheAndLocation,
+} from "@shared/outreach";
 import { nowIso, onboardedUserIds, userDb, type UserDb } from "./db";
 import type { RawJob, ScoreResult } from "./contracts";
 import { scanAll } from "./sources/index";
@@ -95,6 +103,185 @@ function decide(score: number, s: Settings): Job["status"] {
   return "skipped";
 }
 
+async function processAgenciesForUser(db: UserDb, profile: WithId<Profile>, settings: Settings) {
+  if (settings.agencySettings?.enabled === false) return;
+
+  const targetCountries = settings.countries?.length ? settings.countries : ["GLOBAL"];
+  const targetLocations = settings.locations?.length ? settings.locations : [];
+  const targetRoles = settings.roles?.length ? settings.roles : [];
+
+  const catalogAgencies = findAgenciesForLocations({
+    countries: targetCountries,
+    locations: targetLocations,
+    roles: targetRoles,
+  });
+
+  const existingAgencies = await db.list("agencies");
+
+  // Clean up stale catalog agencies from previous searches that do not match the current location scope
+  for (const existing of existingAgencies) {
+    if (existing.status === "submitted") continue;
+    const isFromCatalog = RECRUITMENT_AGENCIES_CATALOG.some(
+      (c) => c.name.toLowerCase() === existing.name.toLowerCase()
+    );
+    const isMatchingDiscovered = catalogAgencies.some(
+      (m) => m.name.toLowerCase() === existing.name.toLowerCase()
+    );
+    if (isFromCatalog && !isMatchingDiscovered) {
+      await db.delete("agencies", existing.id);
+    }
+  }
+
+  for (const item of catalogAgencies) {
+    const slug = item.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    const id = `agency-${slug}`;
+    const exists = existingAgencies.find((a) => a.id === id || a.name.toLowerCase() === item.name.toLowerCase());
+    if (!exists) {
+      await db.set("agencies", id, item);
+      existingAgencies.push({ ...item, id });
+      if (item.isPaidService || item.status === "paid_skipped") {
+        await db.log("warn", "agency", `Discovered ${item.name} — skipped: paid candidate fee detected`);
+      } else {
+        await db.log("info", "agency", `Discovered recruitment agency: ${item.name} (${item.locations.join(", ")}) — 100% Free`);
+      }
+    }
+  }
+
+  if (settings.agencySettings?.autoSubmit !== false) {
+    const toSubmit = existingAgencies.filter((a) => !a.isPaidService && a.status === "verified_free");
+    for (const agency of toSubmit.slice(0, 3)) {
+      const prep = prepareAgencySubmission(profile, settings, agency);
+      if (!prep.canSubmit) {
+        await db.update("agencies", agency.id, {
+          status: "paid_skipped",
+          isPaidService: true,
+          skipReason: prep.skipReason,
+        });
+        await db.log("warn", "agency", `Skipped ${agency.name}: ${prep.skipReason}`);
+      } else {
+        await db.update("agencies", agency.id, {
+          status: "submitted",
+          submittedAt: nowIso(),
+          submissionNotes: prep.submissionNotes,
+          submittedDetails: prep.candidatePayload,
+        });
+        await db.log("success", "agency", `Auto-submitted profile & resume to ${agency.name} (Free agency)`);
+        console.log(`  agency: submitted to ${agency.name}`);
+      }
+    }
+  }
+}
+
+async function processOutreachForUser(db: UserDb, profile: WithId<Profile>, settings: Settings) {
+  if (settings.outreachSettings?.enabled === false) return;
+
+  const targetNiches = settings.outreachSettings?.niches?.length
+    ? settings.outreachSettings.niches
+    : ["Loan Companies & Digital Lending", "Fintech & Payments"];
+
+  const userSpecifiedLocations = (settings.locations || []).filter(Boolean);
+  const userSpecifiedCountries = (settings.countries || []).filter(Boolean);
+  const outreachTargetLocations = (settings.outreachSettings?.targetLocations || []).filter(Boolean);
+
+  let targetLocations: string[] = [];
+  if (outreachTargetLocations.length > 0) {
+    targetLocations = outreachTargetLocations;
+  } else if (userSpecifiedLocations.length > 0) {
+    targetLocations = userSpecifiedLocations;
+  } else if (profile.location) {
+    targetLocations = [profile.location];
+  } else {
+    targetLocations = ["Remote"];
+  }
+
+  let targetCountries: string[] = [];
+  if (userSpecifiedCountries.length > 0) {
+    targetCountries = userSpecifiedCountries;
+  } else if (profile.location) {
+    const found = detectCountryCode(profile.location);
+    if (found) targetCountries = [found];
+  }
+
+  const allowRemote = settings.workModes?.includes("remote") || settings.remoteOnly || false;
+
+  // 1. Auto-search companies in niches
+  if (settings.outreachSettings?.autoSearchCompanies !== false) {
+    const discovered = searchCompaniesByNicheAndLocation({
+      niches: targetNiches,
+      locations: targetLocations,
+      countries: targetCountries,
+      allowRemote,
+    });
+
+    const existing = await db.list("outreachCompanies");
+
+    // Clean up stale catalog entries not matching target locations
+    for (const comp of existing) {
+      if (comp.status === "contacted" || comp.source === "user_import") continue;
+      const matches = isCompanyMatchingLocation(comp, targetLocations, targetCountries, allowRemote);
+      if (!matches) {
+        await db.delete("outreachCompanies", comp.id);
+      }
+    }
+
+    for (const comp of discovered) {
+      const slug = comp.name.toLowerCase().replace(/[^a-z0-9]+/g, "-");
+      const id = `comp-${slug}`;
+      const found = existing.find((c) => c.id === id || c.name.toLowerCase() === comp.name.toLowerCase());
+      if (!found) {
+        await db.set("outreachCompanies", id, comp);
+        existing.push({ ...comp, id });
+        await db.log("info", "outreach", `Discovered ${comp.name} in ${comp.niche} (${comp.contacts.length} HR & stakeholder contacts found)`);
+      }
+    }
+  }
+
+  // 2. Automated cold email outreach (controlled pacing)
+  const dailyLimit = settings.outreachSettings?.dailyEmailLimit ?? 15;
+  const emailsSent = await db.list("coldEmails");
+  const todaySent = emailsSent.filter((e) => isToday(e.sentAt)).length;
+
+  if (todaySent < dailyLimit) {
+    const remainingSlots = Math.min(3, dailyLimit - todaySent); // max 3 per cycle run
+    const readyCompanies = (await db.list("outreachCompanies")).filter((c) => c.status === "contacts_found" || c.status === "outreach_ready");
+
+    let count = 0;
+    for (const company of readyCompanies) {
+      if (count >= remainingSlots) break;
+      // Find priority contact: HR / Talent or Hiring Manager
+      const contact = company.contacts.find((c) => c.roleCategory === "hr_talent") || company.contacts[0];
+      if (!contact) continue;
+
+      let tpl = DEFAULT_COLD_EMAIL_TEMPLATES.find((t) => t.targetAudience === contact.roleCategory);
+      if (!tpl && company.niche.toLowerCase().includes("loan")) {
+        tpl = DEFAULT_COLD_EMAIL_TEMPLATES.find((t) => t.id === "tpl-loan-fintech");
+      }
+      if (!tpl) tpl = DEFAULT_COLD_EMAIL_TEMPLATES[0];
+
+      const record = prepareColdEmailRecord({
+        company,
+        contact,
+        template: tpl,
+        profile,
+        settings,
+      });
+
+      const emailId = `email-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      await db.set("coldEmails", emailId, record);
+
+      await db.update("outreachCompanies", company.id, {
+        status: "contacted",
+        contactedAt: nowIso(),
+        emailsSentCount: (company.emailsSentCount || 0) + 1,
+      });
+
+      await db.log("success", "outreach", `Auto-sent cold outreach email to ${contact.name} (${contact.title}) at ${company.name}`);
+      console.log(`  outreach: sent cold email to ${contact.email} @ ${company.name}`);
+      count++;
+    }
+  }
+}
+
 async function runUser(uid: string) {
   const db = userDb(uid);
   const settings = await db.get("settings", "main");
@@ -125,7 +312,7 @@ async function runUser(uid: string) {
   const ws = await db.get("workerStatus", "main");
   const lastScan = ws?.lastScanAt;
   if (!lastScan || Date.now() - new Date(lastScan).getTime() > SCAN_EVERY_MIN * 60_000) {
-    const res = await scanAll(settings, { limitPerSource: 60 });
+    const res = await scanAll(settings, { limitPerSource: Number(process.env.SCAN_LIMIT ?? 250) });
     let added = 0;
     for (const r of res.jobs) {
       const id = jobIdFor(r);
@@ -269,6 +456,14 @@ async function runUser(uid: string) {
     }
     console.log(`  apply ${j.title} @ ${j.company}: ${res.status} ${res.error ?? ""} (${res.browserSeconds ?? "?"}s browser)`);
   }
+
+  // Agency submissions and cold-email outreach are DISABLED: the previous implementation only wrote
+  // "submitted"/"sent" records without contacting anyone, which reported actions that never happened.
+  // Anything that claims to contact a third party must actually do it (and need the user's approval
+  // for sending messages on their behalf) before it may be re-enabled.
+  void processAgenciesForUser;
+  void processOutreachForUser;
+
   await db.update("workerStatus", "main", { state: "idle", currentJobId: "", heartbeatAt: nowIso(), appliedToday: today });
 }
 

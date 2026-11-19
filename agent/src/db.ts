@@ -49,6 +49,9 @@ export function userDb(uid: string) {
     async add<K extends CollectionName>(c: K, data: Collections[K]) {
       return (await col(c).add(data as FirebaseFirestore.DocumentData)).id;
     },
+    delete(c: CollectionName, id: string) {
+      return col(c).doc(id).delete();
+    },
     log(level: "info" | "success" | "warn" | "error", type: string, message: string, jobId?: string) {
       return col("activity").add({ ts: nowIso(), level, type, message, ...(jobId ? { jobId } : {}) });
     },

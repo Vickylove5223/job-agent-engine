@@ -272,24 +272,30 @@ export function salaryReason(salary: RawJob["salary"], settings: Settings): stri
 
 export function locationReason(raw: RawJob, settings: Settings): string | undefined {
   const countries = (settings.countries ?? []).map((c) => c.toUpperCase());
+  const cities = (settings.locations ?? []).map((l) => l.toLowerCase().trim()).filter(Boolean);
   const modes = settings.workModes ?? [];
   const wantsRemote = modes.includes("remote") || settings.remoteOnly;
   const wantsOnsite = !settings.remoteOnly && (modes.includes("onsite") || modes.includes("hybrid") || modes.length === 0);
   const loc = (raw.location ?? "").trim();
   const head = `${raw.title}\n${raw.description.slice(0, 2500)}`;
 
-  if (!countries.length) {
+  const hasSpecificLocation = countries.length > 0 || cities.length > 0;
+
+  if (!hasSpecificLocation) {
     if (raw.remote) return wantsRemote || !modes.length ? undefined : "remote job but remote not selected";
     return wantsOnsite ? undefined : "not remote";
   }
 
-  // STRICT: the posting's location must explicitly name one of the user's countries (or a city in
-  // them). Broad regions ("Europe", "EMEA"), "Anywhere/Worldwide", and long all-countries lists
-  // don't count — the user only wants jobs in the places they chose.
-  const strict = countries.some((c) => countryMatches(loc, c, false));
-  if (!strict) return loc ? `location "${truncLoc(loc)}" not in ${countries.join("/")}` : "no location given";
+  // If candidate picked a specific location, broad worldwide postings that aren't specific to their location must be skipped
+  if (WORLDWIDE_RE.test(loc) || loc.toLowerCase().includes("worldwide")) {
+    return "worldwide posting, not specific to your chosen location";
+  }
+
+  // STRICT: the posting's location must explicitly match one of the user's countries or cities
+  const strict = countries.some((c) => countryMatches(loc, c, false)) || cities.some((city) => loc.toLowerCase().includes(city));
+  if (!strict) return loc ? `location "${truncLoc(loc)}" not in ${[...cities, ...countries].join("/")}` : "no location given";
   const places = loc.split(/[;|,]/).map((s) => s.trim()).filter(Boolean);
-  if (places.length > 12 || WORLDWIDE_RE.test(loc)) return "worldwide posting, not specific to your countries";
+  if (places.length > 12) return "broad multi-region posting, not specific to your countries";
 
   // explicit "US only" style restriction anywhere near the top of the posting
   const restriction = regionRestriction(`${loc}\n${head}`, countries);
@@ -299,8 +305,8 @@ export function locationReason(raw: RawJob, settings: Settings): string | undefi
   if (raw.remote && !wantsRemote) return "remote job but remote not selected";
   if (!raw.remote && !wantsOnsite) return "not remote";
 
-  if (settings.locations?.length) {
-    const prefs = settings.locations.map((l) => l.toLowerCase().trim()).filter(Boolean);
+  if (cities.length) {
+    const prefs = cities;
     const lower = loc.toLowerCase();
     if (prefs.some((p) => lower.includes(p))) return undefined;
     // the posting names a specific city in the user's countries that isn't one of their cities

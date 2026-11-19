@@ -26,7 +26,7 @@ export const JOB_STATUSES: JobStatus[] = [
 export type Seniority = "intern" | "junior" | "mid" | "senior" | "lead";
 
 export type WorkMode = "remote" | "hybrid" | "onsite";
-export type JobType = "full_time" | "contract" | "part_time" | "freelance" | "internship";
+export type JobType = "full_time" | "contract" | "part_time" | "freelance" | "internship" | "paid_internship";
 
 export interface Settings {
   paused: boolean;
@@ -57,6 +57,24 @@ export interface Settings {
   coverLetter: { mode: "when_required" | "always"; tone: "professional" | "warm" | "concise" };
   /** acceptRequired: tick consent/privacy checkboxes only when the form requires them to apply */
   consent?: { acceptRequired: boolean };
+  /** Settings for recruitment agencies discovery & auto-submission */
+  agencySettings?: {
+    enabled: boolean;
+    autoSubmit: boolean;
+    skipPaidAgencies: boolean;
+    targetLocations?: string[];
+    targetRoles?: string[];
+    maxAgenciesPerRun?: number;
+  };
+  /** Settings for company niche search & automated cold outreach */
+  outreachSettings?: {
+    enabled: boolean;
+    niches: string[];
+    targetLocations: string[];
+    dailyEmailLimit: number;
+    defaultTemplateId?: string;
+    autoSearchCompanies: boolean;
+  };
 }
 
 export interface ResumeExperience {
@@ -245,6 +263,112 @@ export interface SiteConnection {
   error?: string;
 }
 
+export type AgencyStatus =
+  | "discovered"
+  | "verified_free"
+  | "paid_skipped"
+  | "submitting"
+  | "submitted"
+  | "failed";
+
+export interface RecruitmentAgency {
+  name: string;
+  website: string;
+  registrationUrl: string;
+  locations: string[];
+  countries: string[];
+  sectors: string[];
+  /** Whether the service charges candidates/jobseekers */
+  isPaidService: boolean;
+  pricingDetails?: string;
+  status: AgencyStatus;
+  skipReason?: string;
+  foundAt: ISODate;
+  submittedAt?: ISODate;
+  submissionNotes?: string;
+  submissionMethod: "portal_form" | "email" | "external";
+  contactEmail?: string;
+  phone?: string;
+  description?: string;
+  portalFieldsRequired?: string[];
+  submittedDetails?: {
+    candidateName: string;
+    candidateEmail: string;
+    candidatePhone?: string;
+    resumeFileName?: string;
+    targetRoles: string[];
+    locations: string[];
+    salaryExpectation?: string;
+    coverNote?: string;
+  };
+  sample?: boolean;
+}
+
+export type ContactRoleCategory = "hr_talent" | "hiring_manager" | "executive" | "general_inbox";
+
+export interface CompanyContact {
+  id: string;
+  name: string;
+  title: string;
+  email: string;
+  roleCategory: ContactRoleCategory;
+  linkedin?: string;
+  confidence: "verified" | "high" | "pattern_matched";
+}
+
+export type OutreachCompanyStatus =
+  | "discovered"
+  | "contacts_found"
+  | "outreach_ready"
+  | "contacted"
+  | "replied";
+
+export interface OutreachCompany {
+  name: string;
+  domain: string;
+  website: string;
+  niche: string;
+  location: string;
+  country?: string;
+  description?: string;
+  size?: string;
+  contacts: CompanyContact[];
+  status: OutreachCompanyStatus;
+  foundAt: ISODate;
+  contactedAt?: ISODate;
+  emailsSentCount?: number;
+  notes?: string;
+  source: "auto_search" | "user_import";
+  sample?: boolean;
+}
+
+export interface ColdEmailRecord {
+  companyId: string;
+  companyName: string;
+  recipientName: string;
+  recipientEmail: string;
+  recipientTitle: string;
+  roleCategory: ContactRoleCategory;
+  subject: string;
+  body: string;
+  sentAt: ISODate;
+  status: "sent" | "opened" | "replied" | "bounced";
+  templateId?: string;
+  senderEmail?: string;
+  senderProvider?: "gmail" | "smtp" | "default";
+  notes?: string;
+  sample?: boolean;
+}
+
+export interface ColdEmailTemplate {
+  id: string;
+  name: string;
+  targetAudience: ContactRoleCategory | "all";
+  subject: string;
+  body: string;
+  isDefault?: boolean;
+}
+
 /** Collection name → document type. */
 export interface Collections {
   settings: Settings;
@@ -258,6 +382,9 @@ export interface Collections {
   activity: ActivityEntry;
   workerStatus: WorkerStatus;
   connections: SiteConnection;
+  agencies: RecruitmentAgency;
+  outreachCompanies: OutreachCompany;
+  coldEmails: ColdEmailRecord;
 }
 
 export type CollectionName = keyof Collections;

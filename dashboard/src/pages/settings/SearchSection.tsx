@@ -9,6 +9,7 @@ const JOB_TYPES: { value: JobType; label: string }[] = [
   { value: "part_time", label: "Part-time" },
   { value: "freelance", label: "Freelance" },
   { value: "internship", label: "Internship" },
+  { value: "paid_internship", label: "Paid Internship" },
 ];
 const CURRENCIES = ["USD", "NGN", "GBP", "EUR", "CAD", "AUD", "KES", "ZAR", "GHS", "INR", "AED"];
 

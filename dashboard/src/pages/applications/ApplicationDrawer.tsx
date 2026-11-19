@@ -71,7 +71,7 @@ export function ApplicationDrawer({ app, onClose }: { app: AppRow | null; onClos
         app && (
           <>
             {job?.url && (
-              <Button icon={<ArrowUpRight className="size-4" />} onClick={() => window.open(job.url, "_blank", "noopener")}>
+              <Button icon={<ArrowUpRight className="size-4" />} onClick={() => window.open(/greenhouse\.io\/posthog/i.test(job.url) ? "https://jobs.ashbyhq.com/posthog" : job.url, "_blank", "noopener")}>
                 View posting
               </Button>
             )}

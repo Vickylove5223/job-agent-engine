@@ -140,7 +140,11 @@ export function boardsFor(settings: Settings, ats?: Ats): TargetCompany[] {
   for (const b of BOARDS) {
     if (ats && b.ats !== ats) continue;
     if (blocked.includes(b.name.toLowerCase())) continue;
-    const fits = !countries.length || b.countries.some((c) => countries.includes(c)) || (remote && b.remote);
+    // When the user has specified target countries, only scan boards that hire in those countries.
+    // Only fall back to remote-friendly boards when no specific countries were chosen.
+    const fits = !countries.length
+      ? !settings.remoteOnly || b.remote
+      : b.countries.some((c) => countries.includes(c));
     if (fits) out.set(`${b.ats}:${b.slug}`, { ats: b.ats, slug: b.slug, name: b.name, eu: b.eu });
   }
   for (const t of settings.targetCompanies ?? []) {

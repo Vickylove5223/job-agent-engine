@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Check, Clock, ShieldCheck, X } from "lucide-react";
+import { Check, Clock, ExternalLink, ShieldCheck, X } from "lucide-react";
 import type { JobSite } from "@shared/sites";
 import { Badge, Button } from "@/components/ui";
 import { canConnectSites, finishSiteLogin, startSiteLogin } from "@/lib/connect";
@@ -9,6 +9,7 @@ interface Session {
   site: JobSite;
   sessionId: string;
   liveViewUrl: string;
+  contextId?: string;
 }
 
 /** Sign-in panel for selected sites that need the user's own account. */
@@ -56,7 +57,7 @@ export function ConnectAccounts({ sites }: { sites: JobSite[] }) {
               {done ? (
                 <Badge tone="green"><Check className="size-3" />Connected</Badge>
               ) : (
-                <Button type="button" size="sm" disabled={!canConnectSites} loading={starting === s.id} onClick={() => start(s)}>
+                <Button type="button" size="sm" loading={starting === s.id} onClick={() => start(s)}>
                   Connect
                 </Button>
               )}
@@ -89,14 +90,17 @@ export function ConnectAccounts({ sites }: { sites: JobSite[] }) {
 function LiveViewModal({ session, onClose, onDone }: { session: Session; onClose: () => void; onDone: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const finish = async () => {
+  const [allowForce, setAllowForce] = useState(false);
+
+  const finish = async (force = false) => {
     setBusy(true);
     setError(null);
     try {
-      await finishSiteLogin(session.site.id, session.sessionId, (await getIdToken()) ?? "");
+      await finishSiteLogin(session.site.id, session.sessionId, (await getIdToken()) ?? "", force, session.contextId);
       onDone();
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
+      setAllowForce(true);
       setBusy(false);
     }
   };
@@ -106,18 +110,39 @@ function LiveViewModal({ session, onClose, onDone }: { session: Session; onClose
       <div className="relative flex h-full w-full max-w-5xl flex-col bg-bg sm:h-[85vh] sm:rounded-lg sm:border sm:border-border">
         <header className="flex items-center justify-between gap-3 border-b border-border px-4 py-3">
           <div className="min-w-0">
-            <div className="text-sm font-semibold truncate">Sign in to {session.site.name}</div>
-            <div className="text-xs text-muted">This is a secure browser window. Sign in as you normally would.</div>
+            <div className="flex items-center gap-3">
+              <div className="text-sm font-semibold truncate">Sign in to {session.site.name}</div>
+              <a
+                href={session.liveViewUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-accent-strong hover:underline font-medium"
+              >
+                Open in new tab <ExternalLink className="size-3" />
+              </a>
+            </div>
+            <div className="text-xs text-muted">Secure remote browser (ad-blocking active). Sign in as you normally would.</div>
           </div>
           <button type="button" onClick={onClose} className="rounded p-1 text-muted hover:bg-surface-2 hover:text-text cursor-pointer" aria-label="Close">
             <X className="size-5" />
           </button>
         </header>
-        <iframe src={session.liveViewUrl} title={`${session.site.name} sign-in`} allow="fullscreen; clipboard-read; clipboard-write" allowFullScreen className="flex-1 w-full bg-surface" />
+        <iframe
+          src={session.liveViewUrl}
+          title={`${session.site.name} sign-in`}
+          allow="fullscreen; clipboard-read; clipboard-write"
+          allowFullScreen
+          className="flex-1 w-full bg-surface border-0"
+        />
         <footer className="flex flex-wrap items-center justify-end gap-2 border-t border-border px-4 py-3">
-          {error && <span className="mr-auto text-xs text-danger">{error}</span>}
-          <Button type="button" variant="ghost" onClick={onClose}>Cancel</Button>
-          <Button type="button" variant="primary" loading={busy} onClick={finish}>I've signed in</Button>
+          {error && <span className="mr-auto text-xs text-danger max-w-md">{error}</span>}
+          <Button type="button" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
+          {allowForce && (
+            <Button type="button" variant="secondary" disabled={busy} onClick={() => finish(true)}>
+              Connect anyway
+            </Button>
+          )}
+          <Button type="button" variant="primary" loading={busy} onClick={() => finish(false)}>I've signed in</Button>
         </footer>
       </div>
     </div>

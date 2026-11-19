@@ -35,7 +35,10 @@ export async function openBrowser(opts: OpenOptions = {}): Promise<AgentBrowser>
     projectId: env.browserbaseProjectId,
     keepAlive: opts.keepAlive,
     api_timeout: opts.timeoutSec ?? 600,
-    browserSettings: opts.contextId ? { context: { id: opts.contextId, persist: opts.persist ?? false } } : undefined,
+    browserSettings: {
+      blockAds: true,
+      ...(opts.contextId ? { context: { id: opts.contextId, persist: opts.persist ?? false } } : {}),
+    },
   });
   const stagehand = await Stagehand.create({
     browser,

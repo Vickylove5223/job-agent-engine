@@ -22,8 +22,12 @@ export function Login() {
     setBusy(true);
     setMsg(null);
     try {
-      if (mode === "signin") await signIn(email, password);
-      else await signUp(email, password);
+      if (mode === "signin") {
+        await signIn(email, password);
+      } else {
+        localStorage.removeItem("onboarding-draft");
+        await signUp(email, password);
+      }
     } catch (err) {
       const code = (err as { code?: string }).code ?? "";
       setMsg({ tone: "error", text: messages[code] ?? (err as Error).message });

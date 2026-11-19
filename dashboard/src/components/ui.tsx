@@ -135,7 +135,8 @@ export function Textarea({ className, ...rest }: TextareaHTMLAttributes<HTMLText
   return <textarea {...rest} className={cx(control, "py-2 min-h-24 resize-y", className)} />;
 }
 export function Select({ className, children, ...rest }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select {...rest} className={cx(control, "h-9 pr-8", className)}>{children}</select>;
+  const hasCustomWidth = className && /\bw-(?:[0-9]+|auto|fit|min|max)\b/.test(className);
+  return <select {...rest} className={cx(!hasCustomWidth && "w-full", control.replace(/\bw-full\s*/, ""), "h-9 pr-8", className)}>{children}</select>;
 }
 export function Field({ label, hint, children, className }: { label: ReactNode; hint?: ReactNode; children: ReactNode; className?: string }) {
   return (

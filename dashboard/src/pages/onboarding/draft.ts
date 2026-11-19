@@ -1,6 +1,7 @@
 // Local wizard state. Everything lives here until "Launch my agent" writes it to the database.
-import type { JobType, Seniority, WorkMode } from "@shared/types";
+import type { Job, JobType, Seniority, WorkMode } from "@shared/types";
 import { JOB_SITES, type JobSite } from "@shared/sites";
+import type { PrefilledQuestion } from "@/lib/ai";
 
 export interface ResumeFile {
   fileName: string;
@@ -10,40 +11,44 @@ export interface ResumeFile {
 
 export interface Draft {
   step: number;
-  // 1. Welcome
+  // Step 1: Resume & Portfolio -> Full Profile
+  resume: ResumeFile | null;
+  portfolio: string;
   fullName: string;
   phone: string;
   country: string;
   city: string;
-  // 2. Resume
-  resume: ResumeFile | null;
   headline: string;
   linkedin: string;
-  portfolio: string;
-  // 3. Roles
+  extractedSkills?: string[];
+  extractedFacts?: string[];
+  extractedSummary?: string;
+
+  // Step 2: Targeting & Preferences
   roles: string[];
   seniority: Seniority[];
   yearsExperience: string;
   includeKeywords: string[];
   excludeKeywords: string[];
-  // 4. Where
   workModes: WorkMode[];
   countries: string[];
   cities: string[];
   relocate: boolean;
   sponsorship: boolean;
   workAuthorization: string;
-  // 5. Pay
   minSalary: string;
   currency: string;
   currencyTouched: boolean;
   period: "year" | "month";
   jobTypes: JobType[];
   noticePeriod: string;
-  // 6. Sites — null until the recommendation has run for the current `sitesKey`
+
+  // Step 3: Job Matching & Prefilled Questions
+  matchedJobs?: Job[];
+  prefilledQuestions?: PrefilledQuestion[];
+  confirmedQuestions?: boolean;
   enabledSites: string[] | null;
   sitesKey: string;
-  // 7. Autopilot
   capLinkedin: string;
   capIndeed: string;
   capAts: string;
@@ -52,16 +57,17 @@ export interface Draft {
   paused: boolean;
 }
 
-export const TOTAL_STEPS = 7;
+export const TOTAL_STEPS = 4;
 
 export const initialDraft: Draft = {
   step: 1,
-  fullName: "", phone: "", country: "", city: "",
-  resume: null, headline: "", linkedin: "", portfolio: "",
-  roles: [], seniority: [], yearsExperience: "", includeKeywords: [], excludeKeywords: [],
-  workModes: [], countries: [], cities: [], relocate: false, sponsorship: false, workAuthorization: "",
-  minSalary: "", currency: "USD", currencyTouched: false, period: "year", jobTypes: ["full_time"], noticePeriod: "",
-  enabledSites: null, sitesKey: "",
+  resume: null, portfolio: "", fullName: "", phone: "", country: "US", city: "",
+  headline: "", linkedin: "",
+  roles: [], seniority: ["mid"], yearsExperience: "4", includeKeywords: [], excludeKeywords: [],
+  workModes: ["remote"], countries: [], cities: [], relocate: false, sponsorship: false, workAuthorization: "",
+  minSalary: "", currency: "USD", currencyTouched: false, period: "year", jobTypes: ["full_time"], noticePeriod: "2 weeks",
+  matchedJobs: [], prefilledQuestions: [], confirmedQuestions: false,
+  enabledSites: ["greenhouse", "lever", "ashby", "remoteok", "remotive", "workable"], sitesKey: "",
   capLinkedin: "15", capIndeed: "15", capAts: "30", applyThreshold: 80, coverLetter: "when_required", paused: false,
 };
 
@@ -106,13 +112,21 @@ export const onlyRemote = (d: Draft) => d.workModes.length === 1 && d.workModes[
 
 export function isStepValid(d: Draft, step: number): boolean {
   switch (step) {
-    case 1: return d.fullName.trim().length > 0 && d.country.length > 0;
-    case 2: return true;
-    case 3: return d.roles.length > 0 && d.seniority.length > 0;
-    case 4: return d.workModes.length > 0 && (d.countries.length > 0 || onlyRemote(d));
-    case 5: return d.jobTypes.length > 0;
-    case 6: return (d.enabledSites?.length ?? 0) > 0;
-    default: return true;
+    case 1:
+      return Boolean(d.resume);
+    case 2:
+      return Boolean(d.fullName.trim().length > 0);
+    case 3:
+      return (
+        d.roles.length > 0 &&
+        d.seniority.length > 0 &&
+        d.workModes.length > 0 &&
+        (d.countries.length > 0 || onlyRemote(d))
+      );
+    case 4:
+      return true;
+    default:
+      return true;
   }
 }
 
@@ -132,8 +146,12 @@ export const WORK_MODE_OPTIONS: { value: WorkMode; label: string }[] = [
 ];
 
 export const JOB_TYPE_OPTIONS: { value: JobType; label: string }[] = [
-  { value: "full_time", label: "Full-time" }, { value: "contract", label: "Contract" }, { value: "part_time", label: "Part-time" },
-  { value: "freelance", label: "Freelance" }, { value: "internship", label: "Internship" },
+  { value: "full_time", label: "Full-time" },
+  { value: "contract", label: "Contract" },
+  { value: "part_time", label: "Part-time" },
+  { value: "freelance", label: "Freelance" },
+  { value: "internship", label: "Internship" },
+  { value: "paid_internship", label: "Paid Internship" },
 ];
 
 export const CURRENCIES = ["USD", "NGN", "GBP", "EUR", "CAD", "AUD", "KES", "ZAR", "GHS", "INR", "AED"];

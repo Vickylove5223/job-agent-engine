@@ -1,14 +1,32 @@
 import { useState, type ReactNode } from "react";
 import { Link } from "react-router";
-import { AlertTriangle, Check, Download, ExternalLink, FileText, Mail, MessageCircleQuestion, Play, RotateCcw, Send, X } from "lucide-react";
+import { AlertTriangle, Check, Download, ExternalLink, FileText, Loader2, Mail, MessageCircleQuestion, Play, RotateCcw, Send, X } from "lucide-react";
 import type { Gap, Job, JobStatus, Resume, WithId } from "@shared/types";
 import { canTransition } from "@shared/status";
 import { logActivity, nowIso, updateDocument, useCollection, useDoc } from "@/lib/db";
 import { formatDateTime, timeAgo } from "@/lib/format";
 import { Badge, Button, Drawer, EmptyState, LoadingBlock, Tabs, cx, type Tone } from "@/components/ui";
-import { ScoreRing, SourceLabel, StatusBadge } from "@/components/domain";
+import { ScoreRing, SourceLabel, StatusBadge, getSourceInfo } from "@/components/domain";
 
 type Section = "overview" | "resume" | "cover" | "application";
+
+function cleanUrl(url?: string, company?: string): string {
+  if (!url) return "";
+  // Fix known ATS mismatches or broken seeds
+  if (/greenhouse\.io\/posthog/i.test(url) || (company && /posthog/i.test(company) && /greenhouse/i.test(url))) {
+    return "https://jobs.ashbyhq.com/posthog";
+  }
+  if (/greenhouse\.io\/linear/i.test(url) || (company && /linear/i.test(company) && /greenhouse/i.test(url))) {
+    return "https://jobs.ashbyhq.com/linear";
+  }
+  if (/greenhouse\.io\/supabase/i.test(url) || (company && /supabase/i.test(company) && /greenhouse/i.test(url))) {
+    return "https://jobs.ashbyhq.com/supabase";
+  }
+  if (/greenhouse\.io\/automattic/i.test(url)) {
+    return "https://automattic.com/work-with-us/";
+  }
+  return url;
+}
 
 export function JobDrawer({ job, onClose }: { job: WithId<Job> | null; onClose: () => void }) {
   const [section, setSection] = useState<Section>("overview");
@@ -21,6 +39,8 @@ export function JobDrawer({ job, onClose }: { job: WithId<Job> | null; onClose: 
     setSection("overview");
   }
   if (!job) return null;
+
+  const isCurrentlyApplying = job.status === "applying";
 
   const act = async (key: string, to: JobStatus, patch: Partial<Job>, message: string) => {
     setBusy(key);
@@ -53,9 +73,9 @@ export function JobDrawer({ job, onClose }: { job: WithId<Job> | null; onClose: 
         </Button>
       )}
       {canApply && (
-        <Button variant="primary" icon={<Play className="size-4" />} loading={busy === "apply"} disabled={!!busy}
-          onClick={() => act("apply", "ready", { error: "", skipReason: "" }, `Marked ready to apply: ${label}`)}>
-          Apply now
+        <Button variant="primary" icon={isCurrentlyApplying ? <Loader2 className="size-4 animate-spin" /> : <Play className="size-4" />} loading={busy === "apply" || isCurrentlyApplying} disabled={!!busy || isCurrentlyApplying}
+          onClick={() => act("apply", "ready", { error: "", skipReason: "" }, `Queued for the agent: ${job.title} at ${job.company}`)}>
+          {isCurrentlyApplying ? "Applying..." : "Apply now"}
         </Button>
       )}
     </>
@@ -73,13 +93,29 @@ export function JobDrawer({ job, onClose }: { job: WithId<Job> | null; onClose: 
           <span className="text-faint">·</span>
           <span>{job.location || "—"}</span>
           <span className="text-faint">·</span>
-          <SourceLabel source={job.source} />
+          <SourceLabel source={job.source} url={getSourceInfo(job).url} />
           <span className="text-faint">·</span>
           <span>posted {timeAgo(job.postedAt ?? job.foundAt)}</span>
         </span>
       }
       footer={footer}
     >
+      {isCurrentlyApplying && (
+        <div className="mb-5 rounded-lg border border-accent/40 bg-accent-soft/30 p-4">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <span className="text-xs font-bold text-accent-strong flex items-center gap-1.5 uppercase tracking-wider">
+              <Loader2 className="size-3.5 animate-spin text-accent" /> Application in progress
+            </span>
+            <span className="text-xs font-semibold text-text">In progress</span>
+          </div>
+          <div className="text-sm font-semibold text-text">
+            The agent is filling in this application in a hosted browser.
+          </div>
+          <div className="text-xs text-muted font-mono mt-1">
+            It is marked Applied only after the employer confirms the submission.
+          </div>
+        </div>
+      )}
       <div className="mb-5 flex flex-wrap items-center gap-x-6 gap-y-3 rounded-lg border border-border bg-surface p-4">
         <div className="flex items-center gap-3">
           <ScoreRing score={job.score?.master} size={52} />
@@ -98,12 +134,12 @@ export function JobDrawer({ job, onClose }: { job: WithId<Job> | null; onClose: 
         </div>
         <div className="flex flex-wrap gap-3 sm:ml-auto text-sm">
           {job.url && (
-            <a href={job.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 font-medium hover:underline">
+            <a href={cleanUrl(job.url, job.company)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 font-medium hover:underline">
               Open posting <ExternalLink className="size-3.5" />
             </a>
           )}
           {job.applyUrl && job.applyUrl !== job.url && (
-            <a href={job.applyUrl} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-muted hover:text-text hover:underline">
+            <a href={cleanUrl(job.applyUrl, job.company)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-muted hover:text-text hover:underline">
               Apply page <ExternalLink className="size-3.5" />
             </a>
           )}
@@ -386,23 +422,40 @@ function ApplicationSection({ job }: { job: WithId<Job> }) {
     );
   }
   const siteLabel = app.site === "ats" ? "Company ATS" : app.site === "linkedin" ? "LinkedIn" : "Indeed";
+  const sourceInfo = getSourceInfo(job);
   return (
     <div>
       <dl className="mb-6 grid grid-cols-2 gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-4">
         {[
           ["Submitted", formatDateTime(app.submittedAt)],
-          ["Site", siteLabel],
+          ["Site", sourceInfo.url ? (
+            <a href={sourceInfo.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 hover:underline text-text">
+              {siteLabel} ({sourceInfo.label}) <ExternalLink className="size-3 text-muted" />
+            </a>
+          ) : siteLabel],
           ["Resume", app.resumeUsed === "tailored" ? "Tailored" : "Master"],
           ["Cover letter", app.coverLetterUsed ? "Included" : "None"],
         ].map(([k, v]) => (
-          <div key={k} className="bg-surface p-3">
+          <div key={String(k)} className="bg-surface p-3">
             <dt className="text-xs text-muted">{k}</dt>
             <dd className="mt-0.5 text-sm font-medium">{v}</dd>
           </div>
         ))}
       </dl>
 
-      {app.sample && <div className="mb-4"><Badge>Sample</Badge></div>}
+      {app.screenshotJpegBase64 ? (
+        <div className="mb-4 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3 text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+          <Check className="size-4 shrink-0 text-emerald-600 dark:text-emerald-400" />
+          <span><strong>Verified Browser Submission:</strong> Live confirmation screenshot captured directly from the job portal after form submission.</span>
+        </div>
+      ) : (
+        <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs text-amber-800 dark:text-amber-300 flex items-start gap-2">
+          <AlertTriangle className="size-4 shrink-0 mt-0.5 text-amber-600 dark:text-amber-400" />
+          <div>
+            <span className="font-semibold">Simulated / Demonstration Record:</span> No browser screenshot receipt captured. Real live applications executed by the browser agent capture a live submission screenshot.
+          </div>
+        </div>
+      )}
 
       {app.notes && <Block title="Notes"><p className="whitespace-pre-line text-sm">{app.notes}</p></Block>}
 

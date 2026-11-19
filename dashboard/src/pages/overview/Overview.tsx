@@ -44,7 +44,6 @@ export function Overview() {
     return { foundToday, waitingJobs, avgScore, capTotal, appliedToday, appliedHint };
   }, [jobs, applications, settings, worker]);
 
-
   return (
     <div>
       <PageHeader
@@ -80,7 +79,6 @@ export function Overview() {
         )}
         <WorkerPanel worker={worker} settings={settings} jobs={jobs} />
       </div>
-
     </div>
   );
 }

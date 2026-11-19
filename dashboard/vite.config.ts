@@ -4,13 +4,14 @@ import tailwindcss from "@tailwindcss/vite";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { localDbPlugin } from "./dev/localDb";
+import { connectPlugin } from "./dev/connectPlugin";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
   // Relative base so the build works on GitHub Pages under /<repo>/.
   base: "./",
-  plugins: [react(), tailwindcss(), localDbPlugin(path.resolve(here, "../data"))],
+  plugins: [react(), tailwindcss(), localDbPlugin(path.resolve(here, "../data")), connectPlugin()],
   resolve: {
     alias: {
       "@": path.resolve(here, "src"),

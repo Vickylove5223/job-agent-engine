@@ -17,7 +17,8 @@ function slug(s: string) {
 function buildSeed(dataDir: string): Db {
   const db: Db = {
     settings: {}, profile: {}, facts: {}, jobs: {}, resumes: {}, coverLetters: {},
-    applications: {}, questions: {}, activity: {}, workerStatus: {},
+    applications: {}, questions: {}, activity: {}, workerStatus: {}, agencies: {},
+    outreachCompanies: {}, coldEmails: {},
   };
 
   db.settings.main = {
@@ -33,6 +34,20 @@ function buildSeed(dataDir: string): Db {
     onboardedAt: now(),
     targetCompanies: [],
     coverLetter: { mode: "when_required", tone: "professional" },
+    agencySettings: {
+      enabled: true,
+      autoSubmit: true,
+      skipPaidAgencies: true,
+      targetLocations: [],
+      targetRoles: [],
+    },
+    outreachSettings: {
+      enabled: true,
+      niches: ["Loan Companies & Digital Lending", "Fintech & Payments"],
+      targetLocations: [],
+      dailyEmailLimit: 15,
+      autoSearchCompanies: true,
+    },
   };
 
   db.workerStatus.main = {
@@ -140,9 +155,178 @@ function buildSeed(dataDir: string): Db {
     }
   });
 
+  // Sample recruitment agencies demonstrating free auto-submission and paid skipping
+  db.agencies["agency-workforce-ng"] = {
+    name: "Workforce Group Nigeria",
+    website: "https://workforcegroup.com",
+    registrationUrl: "https://workforcegroup.com/job-seekers/drop-cv",
+    locations: ["Lagos", "Abuja", "Remote"],
+    countries: ["NG"],
+    sectors: ["Technology", "Banking & Finance", "Consulting"],
+    isPaidService: false,
+    pricingDetails: "100% Free for candidates (Never pay for employment)",
+    status: "submitted",
+    foundAt: ago(24),
+    submittedAt: ago(4),
+    submissionMethod: "portal_form",
+    contactEmail: "careers@workforcegroup.com",
+    phone: "+234 1 280 1410",
+    description: "Leading HR and talent solutions partner in Nigeria matching candidates with top corporate clients.",
+    portalFieldsRequired: ["fullName", "email", "phone", "resume", "stateOfResidence"],
+    submittedDetails: {
+      candidateName: (db.profile.main as { fullName?: string } | undefined)?.fullName || "Candidate",
+      candidateEmail: (db.profile.main as { email?: string } | undefined)?.email || "candidate@example.com",
+      candidatePhone: (db.profile.main as { phone?: string } | undefined)?.phone || "+234 800 000 0000",
+      resumeFileName: "Candidate_Resume.pdf",
+      targetRoles: ["Product Designer", "UI/UX Designer"],
+      locations: ["Lagos", "Remote"],
+      salaryExpectation: "$60,000+",
+      coverNote: "Registered profile and resume for relevant placement opportunities.",
+    },
+    submissionNotes: "Profile registered. Recruiter desk notified (Ref: AGY-WF-8201).",
+    sample: true,
+  };
+
+  db.agencies["agency-hays-uk"] = {
+    name: "Hays UK & Ireland",
+    website: "https://www.hays.co.uk",
+    registrationUrl: "https://www.hays.co.uk/register",
+    locations: ["London", "Manchester", "Birmingham", "Remote"],
+    countries: ["GB", "IE"],
+    sectors: ["Technology", "Digital", "Finance", "Engineering"],
+    isPaidService: false,
+    pricingDetails: "100% Free for candidates (employer-funded recruitment)",
+    status: "verified_free",
+    foundAt: ago(12),
+    submissionMethod: "portal_form",
+    contactEmail: "candidates@hays.co.uk",
+    phone: "+44 20 7259 8700",
+    description: "UK's leading recruitment specialist with dedicated tech and design placement teams.",
+    portalFieldsRequired: ["fullName", "email", "phone", "resume", "desiredRole"],
+    sample: true,
+  };
+
+  db.agencies["agency-michael-page-uk"] = {
+    name: "Michael Page UK (PageGroup)",
+    website: "https://www.michaelpage.co.uk",
+    registrationUrl: "https://www.michaelpage.co.uk/my-page/register",
+    locations: ["London", "Reading", "Manchester", "Remote"],
+    countries: ["GB"],
+    sectors: ["Technology", "Design & Creative", "Product"],
+    isPaidService: false,
+    pricingDetails: "100% Free for candidates",
+    status: "verified_free",
+    foundAt: ago(8),
+    submissionMethod: "portal_form",
+    contactEmail: "cv@michaelpage.co.uk",
+    description: "Specialized recruitment consultancy representing leading tech firms and enterprises.",
+    portalFieldsRequired: ["fullName", "email", "phone", "resume"],
+    sample: true,
+  };
+
+  db.agencies["agency-paid-sample-club"] = {
+    name: "Executive Placement Club (Paid Membership)",
+    website: "https://example-paid-placement-service.org",
+    registrationUrl: "https://example-paid-placement-service.org/checkout/signup",
+    locations: ["London", "New York", "Remote"],
+    countries: ["GLOBAL", "US", "GB"],
+    sectors: ["Executive", "Management"],
+    isPaidService: true,
+    pricingDetails: "PAID: Charges $199/month candidate membership fee before submission",
+    status: "paid_skipped",
+    skipReason: "Paid service skipped - candidate fee or subscription required ($199/month)",
+    foundAt: ago(16),
+    submissionMethod: "portal_form",
+    description: "Paid subscription candidate network that charges jobseekers upfront.",
+    portalFieldsRequired: ["creditCardNumber", "billingAddress"],
+    sample: true,
+  };
+
+  // Sample outreach companies across requested niches (e.g. loan companies)
+  db.outreachCompanies["comp-fairmoney"] = {
+    name: "FairMoney",
+    domain: "fairmoney.io",
+    website: "https://fairmoney.io",
+    niche: "Loan Companies & Digital Lending",
+    location: "Lagos, Nigeria",
+    country: "NG",
+    description: "Leading mobile banking and instant credit provider in emerging markets.",
+    size: "500-1000",
+    status: "contacted",
+    foundAt: ago(36),
+    contactedAt: ago(5),
+    emailsSentCount: 1,
+    source: "auto_search",
+    contacts: [
+      { id: "c-fm-1", name: "Talent Acquisition Team", title: "Head of People & Talent", email: "talent@fairmoney.io", roleCategory: "hr_talent", confidence: "verified" },
+      { id: "c-fm-2", name: "Engineering & Product Desk", title: "VP of Product & Tech", email: "careers@fairmoney.io", roleCategory: "hiring_manager", confidence: "high" },
+      { id: "c-fm-3", name: "Executive Office", title: "Co-Founder & CEO", email: "laurin@fairmoney.io", roleCategory: "executive", confidence: "high" },
+    ],
+    sample: true,
+  };
+
+  db.coldEmails["email-fm-1"] = {
+    companyId: "comp-fairmoney",
+    companyName: "FairMoney",
+    recipientName: "Talent Acquisition Team",
+    recipientEmail: "talent@fairmoney.io",
+    recipientTitle: "Head of People & Talent",
+    roleCategory: "hr_talent",
+    subject: "Product Designer Application / Inbound — Candidate",
+    body: "Hi Talent Acquisition Team,\n\nI have been following FairMoney's rapid growth in the Loan Companies & Digital Lending space in Lagos...",
+    sentAt: ago(5),
+    status: "sent",
+    templateId: "tpl-talent-pitch",
+    notes: "Cold email sent to Head of Talent",
+    sample: true,
+  };
+
+  db.outreachCompanies["comp-carbon"] = {
+    name: "Carbon",
+    domain: "yourcarbon.com",
+    website: "https://yourcarbon.com",
+    niche: "Loan Companies & Digital Lending",
+    location: "Lagos, Nigeria",
+    country: "NG",
+    description: "Pan-African digital lender providing instant personal loans, SME credit, and payments.",
+    size: "200-500",
+    status: "contacts_found",
+    foundAt: ago(18),
+    source: "auto_search",
+    contacts: [
+      { id: "c-cb-1", name: "People Operations", title: "Head of People Operations", email: "careers@yourcarbon.com", roleCategory: "hr_talent", confidence: "verified" },
+      { id: "c-cb-2", name: "Credit & Product Lead", title: "Head of Digital Lending", email: "recruitment@yourcarbon.com", roleCategory: "hiring_manager", confidence: "high" },
+      { id: "c-cb-3", name: "Chijioke Dozie", title: "Co-Founder & CEO", email: "chijioke@yourcarbon.com", roleCategory: "executive", confidence: "high" },
+    ],
+    sample: true,
+  };
+
+  db.outreachCompanies["comp-funding-circle"] = {
+    name: "Funding Circle",
+    domain: "fundingcircle.com",
+    website: "https://fundingcircle.com",
+    niche: "Loan Companies & Digital Lending",
+    location: "London, United Kingdom",
+    country: "GB",
+    description: "UK's premier small business loan platform facilitating commercial credit.",
+    size: "1000+",
+    status: "contacts_found",
+    foundAt: ago(10),
+    source: "auto_search",
+    contacts: [
+      { id: "c-fc-1", name: "Talent Team", title: "Head of Talent Acquisition UK", email: "careers@fundingcircle.com", roleCategory: "hr_talent", confidence: "verified" },
+      { id: "c-fc-2", name: "Lending Tech Lead", title: "VP of Engineering", email: "tech-recruiting@fundingcircle.com", roleCategory: "hiring_manager", confidence: "high" },
+      { id: "c-fc-3", name: "Lisa Jacobs", title: "Chief Executive Officer", email: "lisa.jacobs@fundingcircle.com", roleCategory: "executive", confidence: "high" },
+    ],
+    sample: true,
+  };
+
   const acts: Array<[number, string, string, string]> = [
+    [0.1, "success", "outreach", "Sample: sent personalized cold email to Head of Talent at FairMoney (Loan Companies)"],
     [0.2, "info", "scan", "Sample: scan found 42 jobs, 6 new, 2 ready, 1 waiting on you"],
+    [0.4, "success", "agency", "Sample: auto-submitted profile & resume to Workforce Group Nigeria (Free agency)"],
     [0.5, "success", "applied", "Sample: applied to Product Designer (Dashboards) at Lumen Health"],
+    [0.8, "warn", "agency", "Sample: skipped Executive Placement Club — paid candidate fee ($199/mo) detected"],
     [1.2, "warn", "question", "Sample: new question — design system ownership at scale"],
     [2.5, "error", "failed", "Sample: failed to apply to Senior UX Designer at Helix Insurance"],
     [3, "info", "tailor", "Sample: tailored resume for WordPress Developer at Brightline Agency"],

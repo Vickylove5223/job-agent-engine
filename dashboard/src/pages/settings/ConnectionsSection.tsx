@@ -4,7 +4,7 @@ import type { Settings, SiteConnection } from "@shared/types";
 import { JOB_SITES, type JobSite } from "@shared/sites";
 import { Badge, Button, type Tone } from "@/components/ui";
 import { setDocument, useCollection } from "@/lib/db";
-import { canConnectSites, finishSiteLogin, startSiteLogin } from "@/lib/connect";
+import { finishSiteLogin, startSiteLogin } from "@/lib/connect";
 import { getIdToken } from "@/lib/firebase";
 import { timeAgo } from "@/lib/format";
 import { SettingsSection } from "./SettingsSection";
@@ -28,11 +28,13 @@ interface LoginSession {
   site: JobSite;
   sessionId: string;
   liveViewUrl: string;
+  contextId?: string;
 }
 
 function LoginModal({ session, onClose }: { session: LoginSession; onClose: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [allowForce, setAllowForce] = useState(false);
 
   useEffect(() => {
     const h = (e: KeyboardEvent) => e.key === "Escape" && !busy && onClose();
@@ -40,14 +42,15 @@ function LoginModal({ session, onClose }: { session: LoginSession; onClose: () =
     return () => window.removeEventListener("keydown", h);
   }, [busy, onClose]);
 
-  const finish = async () => {
+  const finish = async (force = false) => {
     setBusy(true);
     setError(null);
     try {
-      await finishSiteLogin(session.site.id, session.sessionId, await requireToken());
+      await finishSiteLogin(session.site.id, session.sessionId, await requireToken(), force, session.contextId);
       onClose();
     } catch (e) {
       setError(errMsg(e));
+      setAllowForce(true);
     } finally {
       setBusy(false);
     }
@@ -59,7 +62,17 @@ function LoginModal({ session, onClose }: { session: LoginSession; onClose: () =
       <div className="relative flex h-full max-h-[52rem] w-full max-w-5xl flex-col overflow-hidden rounded-lg border border-border bg-surface">
         <header className="flex items-start justify-between gap-4 border-b border-border px-4 py-3 sm:px-5">
           <div className="min-w-0">
-            <h2 className="text-[15px] font-semibold truncate">Sign in to {session.site.name}</h2>
+            <div className="flex items-center gap-3">
+              <h2 className="text-[15px] font-semibold truncate">Sign in to {session.site.name}</h2>
+              <a
+                href={session.liveViewUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs text-accent-strong hover:underline font-medium"
+              >
+                Open in new tab <ExternalLink className="size-3" />
+              </a>
+            </div>
             <p className="text-xs text-muted mt-0.5">Sign in directly on the site below. Your password goes to {session.site.name} only and is never stored.</p>
           </div>
           <button onClick={onClose} disabled={busy} className="p-1 rounded text-muted hover:text-text hover:bg-surface-2 cursor-pointer" aria-label="Close">
@@ -69,15 +82,21 @@ function LoginModal({ session, onClose }: { session: LoginSession; onClose: () =
         <iframe
           src={session.liveViewUrl}
           title={`${session.site.name} sign-in`}
-          className="min-h-0 flex-1 w-full bg-surface-2"
-          sandbox="allow-same-origin allow-scripts allow-forms allow-popups"
-          allow="clipboard-read; clipboard-write"
+          className="min-h-0 flex-1 w-full bg-surface-2 border-0"
+          sandbox="allow-same-origin allow-scripts allow-forms allow-popups allow-modals allow-downloads allow-popups-to-escape-sandbox"
+          allow="clipboard-read; clipboard-write; fullscreen"
+          allowFullScreen
         />
         <footer className="flex flex-wrap items-center justify-between gap-3 border-t border-border bg-surface-2 px-4 py-3 sm:px-5">
-          <span className="text-[13px] text-danger min-h-5">{error}</span>
+          <span className="text-[13px] text-danger min-h-5 max-w-lg">{error}</span>
           <div className="flex items-center gap-2">
             <Button size="sm" variant="ghost" onClick={onClose} disabled={busy}>Cancel</Button>
-            <Button size="sm" variant="primary" loading={busy} onClick={finish}>I've signed in</Button>
+            {allowForce && (
+              <Button size="sm" variant="secondary" disabled={busy} onClick={() => finish(true)}>
+                Connect anyway
+              </Button>
+            )}
+            <Button size="sm" variant="primary" loading={busy} onClick={() => finish(false)}>I've signed in</Button>
           </div>
         </footer>
       </div>
@@ -109,7 +128,7 @@ export function ConnectionsSection({ settings }: { settings: Settings }) {
   const connect = (site: JobSite) =>
     run(site, async () => {
       const r = await startSiteLogin(site.id, await requireToken());
-      setSession({ site, sessionId: r.sessionId, liveViewUrl: r.liveViewUrl });
+      setSession({ site, sessionId: r.sessionId, liveViewUrl: r.liveViewUrl, contextId: r.contextId });
     });
 
   const disconnect = (site: JobSite) => {
@@ -124,12 +143,10 @@ export function ConnectionsSection({ settings }: { settings: Settings }) {
       description="Job sites that need a login to search or apply. You sign in once in a secure hosted browser; the agent reuses that session."
       hideFooter
     >
-      {!canConnectSites && (
-        <div className="mb-4 flex items-start gap-2 rounded-md bg-info-soft px-4 py-3 text-sm text-info">
-          <Info className="mt-0.5 size-4 shrink-0" />
-          <span>Account connections turn on once the agent service is deployed. Passwords are never stored — you sign in directly on each site in a secure hosted browser.</span>
-        </div>
-      )}
+      <div className="mb-4 flex items-start gap-2 rounded-md bg-accent-soft px-4 py-3 text-sm text-text">
+        <Info className="mt-0.5 size-4 shrink-0 text-accent-strong" />
+        <span>You sign in directly on each site inside our secure hosted browser. Your password is never seen or stored on our servers.</span>
+      </div>
 
       {sites.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border-strong px-4 py-6 text-center text-sm text-muted">
@@ -165,14 +182,14 @@ export function ConnectionsSection({ settings }: { settings: Settings }) {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {status === "connected" && (
-                    <Button size="sm" variant="ghost" disabled={!canConnectSites || busy !== null} onClick={() => disconnect(site)}>
+                    <Button size="sm" variant="ghost" disabled={busy !== null} onClick={() => disconnect(site)}>
                       Disconnect
                     </Button>
                   )}
                   <Button
                     size="sm"
                     variant={status === "connected" ? "secondary" : "primary"}
-                    disabled={!canConnectSites || (busy !== null && busy !== site.id)}
+                    disabled={busy !== null && busy !== site.id}
                     loading={busy === site.id}
                     onClick={() => connect(site)}
                   >

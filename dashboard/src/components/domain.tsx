@@ -1,4 +1,5 @@
 // Domain widgets shared across pages: status badges, score ring, source labels, activity rows.
+import { ExternalLink } from "lucide-react";
 import type { ActivityEntry, JobSource, JobStatus, Outcome } from "@shared/types";
 import { STATUS_LABEL } from "@shared/status";
 import { JOB_SITES } from "@shared/sites";
@@ -49,13 +50,93 @@ const sourceColor: Record<JobSource, string> = {
 export const sourceName = (source: string) =>
   SOURCE_LABEL[source as JobSource] ?? JOB_SITES.find((s) => s.id === source)?.name ?? source;
 
-export function SourceLabel({ source }: { source: JobSource | string }) {
-  return (
-    <span className="inline-flex items-center gap-2 text-sm">
+export function getSourceInfo(job?: { source?: string; company?: string; url?: string; applyUrl?: string }): { label: string; url: string } {
+  if (!job) return { label: "", url: "" };
+  const src = (job.source || "").toLowerCase();
+  const comp = (job.company || "").toLowerCase();
+  const rawUrl = job.url || job.applyUrl || "";
+
+  // 1. Check if rawUrl already has a specific board
+  if (/jobs\.ashbyhq\.com\/([^/?#]+)/i.test(rawUrl)) {
+    const slug = rawUrl.match(/jobs\.ashbyhq\.com\/([^/?#]+)/i)?.[1];
+    return { label: "Ashby", url: `https://jobs.ashbyhq.com/${slug}` };
+  }
+  if (/boards\.greenhouse\.io\/([^/?#]+)/i.test(rawUrl) && !/posthog/i.test(rawUrl)) {
+    const slug = rawUrl.match(/boards\.greenhouse\.io\/([^/?#]+)/i)?.[1];
+    return { label: "Greenhouse", url: `https://boards.greenhouse.io/${slug}` };
+  }
+  if (/jobs\.lever\.co\/([^/?#]+)/i.test(rawUrl)) {
+    const slug = rawUrl.match(/jobs\.lever\.co\/([^/?#]+)/i)?.[1];
+    return { label: "Lever", url: `https://jobs.lever.co/${slug}` };
+  }
+
+  // 2. Company specific mappings for known boards
+  if (/posthog/i.test(comp)) {
+    return { label: "Ashby", url: "https://jobs.ashbyhq.com/posthog" };
+  }
+  if (/linear/i.test(comp)) {
+    return { label: "Ashby", url: "https://jobs.ashbyhq.com/linear" };
+  }
+  if (/supabase/i.test(comp)) {
+    return { label: "Ashby", url: "https://jobs.ashbyhq.com/supabase" };
+  }
+  if (/canonical/i.test(comp)) {
+    return { label: "Greenhouse", url: "https://boards.greenhouse.io/canonical" };
+  }
+  if (/gitlab/i.test(comp)) {
+    return { label: "Greenhouse", url: "https://boards.greenhouse.io/gitlab" };
+  }
+  if (/elastic/i.test(comp)) {
+    return { label: "Greenhouse", url: "https://boards.greenhouse.io/elastic" };
+  }
+  if (/stripe/i.test(comp)) {
+    return { label: "Greenhouse", url: "https://boards.greenhouse.io/stripe" };
+  }
+  if (/dept/i.test(comp)) {
+    return { label: "Greenhouse", url: "https://boards.greenhouse.io/dept" };
+  }
+  if (/automattic/i.test(comp)) {
+    return { label: "Lever", url: "https://automattic.com/work-with-us/" };
+  }
+
+  // 3. Fallback by source type
+  if (src === "ashby") return { label: "Ashby", url: "https://jobs.ashbyhq.com" };
+  if (src === "greenhouse") return { label: "Greenhouse", url: "https://boards.greenhouse.io" };
+  if (src === "lever") return { label: "Lever", url: "https://jobs.lever.co" };
+  if (src === "remoteok") return { label: "RemoteOK", url: "https://remoteok.com" };
+  if (src === "remotive") return { label: "Remotive", url: "https://remotive.com" };
+  if (src === "weworkremotely") return { label: "WeWorkRemotely", url: "https://weworkremotely.com" };
+  if (src === "linkedin" || src === "linkedin_easy") return { label: "LinkedIn", url: "https://www.linkedin.com/jobs" };
+  if (src === "indeed") return { label: "Indeed", url: "https://www.indeed.com" };
+
+  return { label: sourceName(src) || "Source", url: rawUrl || "" };
+}
+
+export function SourceLabel({ source, url }: { source: JobSource | string; url?: string }) {
+  const content = (
+    <span className="inline-flex items-center gap-1.5 text-sm group">
       <span className="size-2 rounded-sm" style={{ background: sourceColor[source as JobSource] ?? "var(--text-faint)" }} />
-      {sourceName(source)}
+      <span>{sourceName(source)}</span>
+      {url && <ExternalLink className="size-3 text-muted group-hover:text-text opacity-70 transition-opacity" />}
     </span>
   );
+
+  if (url) {
+    return (
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        className="inline-flex items-center hover:underline text-text"
+        title={`Visit source board (${sourceName(source)})`}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {content}
+      </a>
+    );
+  }
+
+  return content;
 }
 
 const levelColor: Record<ActivityEntry["level"], string> = {
