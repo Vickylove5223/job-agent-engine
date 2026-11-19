@@ -7,7 +7,7 @@ import { formatSalary, timeAgo } from "@/lib/format";
 import {
   Badge, Button, EmptyState, Input, LoadingBlock, PageHeader, Select, Switch, Table, Tabs, Td, Th, Tr, cx,
 } from "@/components/ui";
-import { SOURCE_LABEL, ScoreRing, SourceLabel, StatusBadge } from "@/components/domain";
+import { ScoreRing, SourceLabel, StatusBadge, sourceName } from "@/components/domain";
 import { downloadJobsCsv } from "./csv";
 import { JobDrawer } from "./JobDrawer";
 
@@ -154,7 +154,7 @@ export function Jobs() {
         </div>
         <Select value={source} onChange={(e) => setSource(e.target.value as "all" | JobSource)} className="lg:w-44" aria-label="Source">
           <option value="all">All sources</option>
-          {sources.map((s) => <option key={s} value={s}>{SOURCE_LABEL[s] ?? s}</option>)}
+          {sources.map((s) => <option key={s} value={s}>{sourceName(s)}</option>)}
         </Select>
         <Select value={String(minScore)} onChange={(e) => setMinScore(Number(e.target.value))} className="lg:w-36" aria-label="Minimum score">
           <option value="0">Any score</option>

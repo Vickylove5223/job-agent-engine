@@ -1,6 +1,6 @@
 import type { Job, WithId } from "@shared/types";
 import { STATUS_LABEL } from "@shared/status";
-import { SOURCE_LABEL } from "@/components/domain";
+import { sourceName } from "@/components/domain";
 
 function cell(v: unknown): string {
   const s = v === undefined || v === null ? "" : String(v);
@@ -14,7 +14,7 @@ export function downloadJobsCsv(jobs: WithId<Job>[]) {
     "salary_min", "salary_max", "currency", "found_at", "posted_at", "url",
   ];
   const rows = jobs.map((j) => [
-    j.id, j.title, j.company, j.location, j.remote ? "yes" : "no", SOURCE_LABEL[j.source] ?? j.source,
+    j.id, j.title, j.company, j.location, j.remote ? "yes" : "no", sourceName(j.source),
     STATUS_LABEL[j.status] ?? j.status, j.score?.master, j.score?.tailored, j.salary?.min, j.salary?.max,
     j.salary?.currency, j.foundAt, j.postedAt, j.url,
   ]);

@@ -1,9 +1,9 @@
 // One open question card: context, adaptive input, actions.
 import { useEffect, useRef, useState } from "react";
-import { Check, Clock } from "lucide-react";
+import { Check, Clock, Sparkles } from "lucide-react";
 import type { Job, Question, WithId } from "@shared/types";
 import { Badge, Button, Switch, cx, type Tone } from "@/components/ui";
-import { AnswerInput, composeAnswer, emptyDraft, type Draft } from "./AnswerInput";
+import { AnswerInput, composeAnswer, draftFromAnswer, emptyDraft, type Draft } from "./AnswerInput";
 
 export const ORIGIN: Record<Question["origin"], { label: string; tone: Tone }> = {
   profile: { label: "Setup", tone: "neutral" },
@@ -51,11 +51,19 @@ export function QuestionCard({
   onSkip: () => void;
   onDismiss: () => Promise<void>;
 }) {
-  const [draft, setDraft] = useState<Draft>(emptyDraft);
+  const suggestion = question.suggestedAnswer?.trim();
+  const [draft, setDraft] = useState<Draft>(() => (suggestion ? draftFromAnswer(question, suggestion) : emptyDraft));
   const [saveAsFact, setSaveAsFact] = useState(question.saveAsFact ?? true);
   const [busy, setBusy] = useState<null | "save" | "na" | "dismiss">(null);
   const ref = useRef<HTMLDivElement>(null);
   const answer = composeAnswer(question, draft);
+  // A suggestion that arrives later (realtime) fills the box only if the user hasn't typed yet.
+  const touched = useRef(false);
+  useEffect(() => {
+    if (suggestion && !touched.current) setDraft(draftFromAnswer(question, suggestion));
+  }, [suggestion, question]);
+  const usingSuggestion = !!suggestion && answer === composeAnswer(question, draftFromAnswer(question, suggestion));
+  const placeholders = answer.match(/\[[^\]]{1,60}\]/g) ?? [];
   const origin = ORIGIN[question.origin] ?? ORIGIN.profile;
 
   useEffect(() => {
@@ -74,7 +82,7 @@ export function QuestionCard({
     }
   };
   const save = () => {
-    if (!answer || busy || phase !== "idle") return;
+    if (!answer || placeholders.length || busy || phase !== "idle") return;
     void run("save", () => onSave(answer, saveAsFact));
   };
 
@@ -121,7 +129,16 @@ export function QuestionCard({
                 )}
 
                 <div className="mt-4">
-                  <AnswerInput question={question} draft={draft} onChange={setDraft} />
+                  {suggestion && (
+                    <div className="mb-2 flex items-start gap-2 text-[13px] text-muted">
+                      <Sparkles className="mt-0.5 size-3.5 shrink-0 text-accent-strong" />
+                      <span>
+                        {usingSuggestion ? "Suggested answer drafted from your resume — check it and edit anything that isn't right." : "Edited from the suggested answer."}
+                        {placeholders.length > 0 && <span className="text-warning"> Fill in the parts in [brackets] before saving.</span>}
+                      </span>
+                    </div>
+                  )}
+                  <AnswerInput question={question} draft={draft} onChange={(d) => { touched.current = true; setDraft(d); }} />
                 </div>
 
                 <div className="mt-4">
@@ -139,7 +156,7 @@ export function QuestionCard({
                     <Button variant="secondary" loading={busy === "na"} disabled={!!busy} onClick={() => void run("na", onNotApplicable)}>
                       I don't have this
                     </Button>
-                    <Button variant="primary" loading={busy === "save"} disabled={!answer || !!busy} onClick={save} title="Ctrl+Enter">
+                    <Button variant="primary" loading={busy === "save"} disabled={!answer || placeholders.length > 0 || !!busy} onClick={save} title="Ctrl+Enter">
                       Save answer
                       <kbd className="hidden sm:inline rounded border border-current/30 px-1 text-[10px] font-normal opacity-70">Ctrl ↵</kbd>
                     </Button>

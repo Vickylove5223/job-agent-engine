@@ -200,6 +200,8 @@ export interface Question {
   /** choice questions: allow picking several options */
   multiple?: boolean;
   status: "open" | "answered" | "dismissed";
+  /** AI-drafted answer from the resume/facts, prefilled for the user to edit */
+  suggestedAnswer?: string;
   answer?: string;
   saveAsFact: boolean;
   createdAt: ISODate;

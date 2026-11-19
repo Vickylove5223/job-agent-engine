@@ -56,6 +56,20 @@ async function upsertQuestions(db: UserDb, qs: ScoreResult["questions"], jobId: 
   return ids;
 }
 
+async function draftSuggestions(db: UserDb, resumeText: string, facts: string[], limit = 6) {
+  const open = (await db.list("questions", ["status", "==", "open"])).filter((q) => !q.suggestedAnswer && q.inputType !== "choice");
+  for (const q of open.slice(0, limit)) {
+    try {
+      const job = q.jobIds[0] ? await db.get("jobs", q.jobIds[0]) : null;
+      const suggestedAnswer = await ai.suggestAnswer({ question: q.text, whyNeeded: q.whyNeeded, resumeText, facts, job: job ? { title: job.title, company: job.company } : undefined });
+      if (suggestedAnswer) await db.update("questions", q.id, { suggestedAnswer });
+    } catch (e) {
+      console.warn(`  suggestion failed: ${(e as Error).message}`);
+      break;
+    }
+  }
+}
+
 async function ensureResume(db: UserDb, profile: WithId<Profile>) {
   const mr = profile.masterResume;
   if (!mr?.pdfBase64) return null;
@@ -102,6 +116,9 @@ async function runUser(uid: string) {
     const openQ = await db.list("questions", ["status", "==", "open"]);
     for (const j of waiting) if (!openQ.some((q) => q.jobIds.includes(j.id))) await setStatus(db, j, "new");
   }
+
+  // 1b) Draft suggested answers for open questions so the user only has to edit them.
+  await draftSuggestions(db, resume.text, facts);
 
   // 2) Scan (throttled).
   const ws = await db.get("workerStatus", "main");

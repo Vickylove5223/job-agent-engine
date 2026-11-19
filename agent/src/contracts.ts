@@ -62,6 +62,8 @@ export interface AI {
   tailorResume(input: { master: Resume; facts: string[]; job: Job }): Promise<{ resume: Resume; changes: string[] }>;
   writeCoverLetter(input: { profile: Profile; resumeText: string; facts: string[]; job: Job; tone: string }): Promise<string>;
   answerField(input: { field: FieldQuestion; profile: Profile; facts: string[]; job: Job }): Promise<FieldAnswer>;
+  /** Draft answer for a dashboard question, for the user to edit (placeholders where unsure). */
+  suggestAnswer(input: { question: string; whyNeeded?: string; resumeText: string; facts: string[]; job?: { title: string; company: string } }): Promise<string>;
 }
 
 // ---------------- Applier ----------------

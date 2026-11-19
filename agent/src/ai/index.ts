@@ -557,12 +557,38 @@ async function resumeTextFromPdf(pdfBase64: string): Promise<string> {
   return normalizeWhitespace(Array.isArray(text) ? text.join("\n\n") : text);
 }
 
+// ---------------- suggestAnswer ----------------
+/**
+ * Drafts an answer to a question the agent asked the user, so they only have to edit it.
+ * Uses ONLY the resume + facts. Anything not supported becomes a clearly marked [placeholder]
+ * the user must fill in — never an invented claim.
+ */
+async function suggestAnswer(input: { question: string; whyNeeded?: string; resumeText: string; facts: string[]; job?: { title: string; company: string } }): Promise<string> {
+  const out = await generateJson(
+    [
+      "Draft a short first-person answer (1–3 sentences) the candidate can edit before saving.",
+      "Use ONLY information from the RESUME and FACTS below. Prefer concrete names of projects, employers and tools that appear there.",
+      "If the resume/facts do not clearly support an answer, do NOT guess: write the most likely helpful structure with [square-bracket placeholders] for the parts the candidate must confirm, e.g. \"[Yes/No] — I have [N] years of …\".",
+      "Never invent employers, numbers, degrees, certifications, languages or skills.",
+      `QUESTION: ${input.question}`,
+      input.whyNeeded ? `WHY THE AGENT ASKS: ${input.whyNeeded}` : "",
+      input.job ? `FOR JOB: ${input.job.title} at ${input.job.company}` : "",
+      `FACTS:\n- ${input.facts.join("\n- ") || "(none)"}`,
+      `RESUME:\n${input.resumeText.slice(0, 9000)}`,
+    ].filter(Boolean).join("\n\n"),
+    z.object({ answer: z.string() }),
+    { temperature: 0.3 },
+  );
+  return out.answer.trim();
+}
+
 export const ai: AI = {
   resumeTextFromPdf,
   structureResume,
   scoreJob,
   tailorResume,
   writeCoverLetter,
+  suggestAnswer,
   answerField: (input: { field: FieldQuestion; profile: import("@shared/types").Profile; facts: string[]; job: Job }) => answerField(input),
 };
 

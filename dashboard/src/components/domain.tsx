@@ -1,6 +1,7 @@
 // Domain widgets shared across pages: status badges, score ring, source labels, activity rows.
 import type { ActivityEntry, JobSource, JobStatus, Outcome } from "@shared/types";
 import { STATUS_LABEL } from "@shared/status";
+import { JOB_SITES } from "@shared/sites";
 import { Badge, cx, type Tone } from "./ui";
 import { timeAgo } from "@/lib/format";
 
@@ -44,11 +45,15 @@ export const SOURCE_LABEL: Record<JobSource, string> = {
 const sourceColor: Record<JobSource, string> = {
   greenhouse: "#3ab549", lever: "#6b7280", ashby: "#5b5bd6", remoteok: "#ff4742", adzuna: "#2f6fed", linkedin: "#0a66c2", indeed: "#2557a7",
 };
-export function SourceLabel({ source }: { source: JobSource }) {
+/** Any site id from the catalog (the scanner uses more sources than the JobSource union). */
+export const sourceName = (source: string) =>
+  SOURCE_LABEL[source as JobSource] ?? JOB_SITES.find((s) => s.id === source)?.name ?? source;
+
+export function SourceLabel({ source }: { source: JobSource | string }) {
   return (
     <span className="inline-flex items-center gap-2 text-sm">
-      <span className="size-2 rounded-sm" style={{ background: sourceColor[source] }} />
-      {SOURCE_LABEL[source]}
+      <span className="size-2 rounded-sm" style={{ background: sourceColor[source as JobSource] ?? "var(--text-faint)" }} />
+      {sourceName(source)}
     </span>
   );
 }

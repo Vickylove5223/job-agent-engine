@@ -24,11 +24,14 @@ export function modelName(): string {
  * Free-tier quotas are per model per day, so we walk a chain of models and skip any that hit
  * their daily limit. Override with GEMINI_MODELS="a,b,c" (or a single GEMINI_MODEL).
  */
-const MODEL_CHAIN = (process.env.GEMINI_MODELS || process.env.GEMINI_MODEL || "gemini-flash-latest,gemini-3.5-flash,gemini-flash-lite-latest,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-2.5-flash,gemini-2.5-flash-lite")
+const MODEL_CHAIN = (process.env.GEMINI_MODELS || process.env.GEMINI_MODEL || "gemini-flash-lite-latest,gemini-3.5-flash-lite,gemini-3.1-flash-lite,gemini-flash-latest,gemini-3.5-flash,gemini-2.5-flash")
   .split(",").map((s) => s.trim()).filter(Boolean);
 const exhausted = new Set<string>();
 function activeModels() {
-  return MODEL_CHAIN.filter((m) => !exhausted.has(m));
+  const now = Date.now();
+  const ok = MODEL_CHAIN.filter((m) => !exhausted.has(m));
+  const warm = ok.filter((m) => (cooling.get(m) ?? 0) < now);
+  return warm.length ? warm : ok; // if everything is cooling, try anyway
 }
 function isDailyQuota(err: unknown) {
   const m = String((err as { message?: unknown })?.message ?? "");
@@ -37,6 +40,12 @@ function isDailyQuota(err: unknown) {
 function isUnavailableModel(err: unknown) {
   return statusOf(err) === 404;
 }
+/** Overloaded (503) or timed out: skip this model for a few minutes rather than waiting on it. */
+const cooling = new Map<string, number>();
+function isOverloaded(err: unknown) {
+  const m = String((err as { message?: unknown })?.message ?? "");
+  return statusOf(err) === 503 || /overloaded|UNAVAILABLE|timed? ?out|aborted/i.test(m);
+}
 
 let client: GoogleGenAI | null = null;
 function getClient(): GoogleGenAI {
@@ -44,7 +53,7 @@ function getClient(): GoogleGenAI {
   const apiKey = process.env.MODEL_API_KEY;
   if (!apiKey) throw new Error("Missing MODEL_API_KEY (Google AI Studio key). Add it to agent/.env.");
   // JSON mode (responseMimeType/responseJsonSchema) is only enabled on v1beta.
-  client = new GoogleGenAI({ apiKey, apiVersion: "v1beta" });
+  client = new GoogleGenAI({ apiKey, apiVersion: "v1beta", httpOptions: { timeout: 45_000 } });
   return client;
 }
 
@@ -128,6 +137,12 @@ async function callModel(args: {
         if (!activeModels().length) break;
         attempt--; // don't count a model switch as a retry
         continue;
+      }
+      if (isOverloaded(err) && activeModels().length > 1) {
+        const m = modelName();
+        cooling.set(m, Date.now() + 5 * 60_000);
+        console.warn(`[ai] ${m} overloaded/slow; using ${activeModels()[0]} for the next 5 min`);
+        continue; // counts as an attempt, so a fully overloaded chain still ends
       }
       const status = statusOf(err);
       const retryable = status === 429 || status === 503 || status === 500;
