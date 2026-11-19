@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router";
-import { ArrowDown, ArrowUp, ArrowUpDown, Briefcase, Search } from "lucide-react";
+import { ArrowDown, ArrowUp, ArrowUpDown, Briefcase, Search, Sparkles } from "lucide-react";
 import type { Job, JobSource, JobStatus, WithId } from "@shared/types";
-import { useCollection } from "@/lib/db";
+import { useCollection, useDoc } from "@/lib/db";
+import { APPLY_MIN_SCORE, requestRun, runPhase } from "@/lib/runRequest";
 import { formatSalary, timeAgo } from "@/lib/format";
 import {
   Badge, Button, EmptyState, Input, LoadingBlock, PageHeader, Select, Switch, Table, Tabs, Td, Th, Tr, cx,
@@ -40,6 +41,10 @@ export function Jobs() {
   const openId = params.get("job");
 
   const { data: jobs, loading } = useCollection("jobs", { orderBy: "foundAt", desc: true });
+  const { data: settings } = useDoc("settings", "main");
+  const { data: worker } = useDoc("workerStatus", "main");
+  const [requesting, setRequesting] = useState(false);
+  const phase = runPhase(worker);
 
   const [source, setSource] = useState<"all" | JobSource>("all");
   const [minScore, setMinScore] = useState(0);
@@ -101,10 +106,39 @@ export function Jobs() {
     setSort((s) => (s.key === key ? { key, desc: !s.desc } : { key, desc: true }));
 
   const header = (
-    <PageHeader
-      title="Jobs"
-      description="Every job the agent found, scored against your resume."
-    />
+    <>
+      <PageHeader
+        title="Jobs"
+        description="Every job the agent found, scored against your resume."
+        actions={
+          <Button
+            variant="primary"
+            icon={phase === "idle" ? <Sparkles className="size-4" /> : undefined}
+            loading={requesting || phase !== "idle"}
+            disabled={requesting || phase !== "idle"}
+            onClick={async () => {
+              setRequesting(true);
+              try {
+                await requestRun(settings);
+              } finally {
+                setRequesting(false);
+              }
+            }}
+          >
+            {phase === "queued" ? "Starting search…" : phase === "running" ? "Searching & applying…" : `Find jobs & apply (${APPLY_MIN_SCORE}%+)`}
+          </Button>
+        }
+      />
+      {phase !== "idle" && (
+        <div className="-mt-3 mb-5 rounded-md bg-info-soft px-4 py-3 text-sm text-info">
+          {phase === "queued"
+            ? `Requested ${timeAgo(worker?.runRequestedAt)}. The cloud agent starts within about 5 minutes, searches only the locations in your settings, lists every job here with its score, and applies to the ones scoring ${APPLY_MIN_SCORE}% or more.`
+            : worker?.state === "applying"
+              ? `Applying now${worker.currentJobId ? `: ${jobs.find((j) => j.id === worker.currentJobId)?.title ?? ""}` : ""}… A job moves to Applied only after the employer confirms the submission.`
+              : "Searching your job sites and scoring each job against your resume…"}
+        </div>
+      )}
+    </>
   );
 
   if (loading) return <>{header}<LoadingBlock /></>;

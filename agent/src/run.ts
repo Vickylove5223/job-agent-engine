@@ -337,6 +337,17 @@ async function runUser(uid: string) {
     }
   }
 
+  // 2b2) If the user lowered the apply bar, jobs previously skipped ONLY for their score get another
+  //      chance (never jobs skipped by the location/role filters or by the user).
+  for (const j of await db.list("jobs", ["status", "==", "skipped"])) {
+    const best = j.score?.tailored ?? j.score?.master;
+    const scoreSkip = /Match score|below|Still \d+ after tailoring/i.test(j.skipReason ?? "");
+    if (best !== undefined && scoreSkip && best >= settings.thresholds.apply) {
+      await setStatus(db, j, "ready", { skipReason: "" });
+      await db.log("info", "requeue", `${j.title} at ${j.company} (score ${best}) now meets your ${settings.thresholds.apply}% bar — queued to apply`, j.id);
+    }
+  }
+
   // 2c) Drop job questions whose jobs are all gone (filtered/skipped) — never ask about jobs
   //     the user no longer wants. Setup/profile questions are kept.
   {
