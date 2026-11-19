@@ -248,6 +248,8 @@ export interface WorkerStatus {
   blockedUntil?: { linkedin?: ISODate; indeed?: ISODate };
   version?: string;
   lastScanAt?: ISODate;
+  /** set by the dashboard's "Run now" button; the next cloud cycle scans immediately */
+  runRequestedAt?: ISODate;
 }
 
 /**

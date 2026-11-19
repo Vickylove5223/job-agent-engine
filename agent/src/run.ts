@@ -311,7 +311,9 @@ async function runUser(uid: string) {
   // 2) Scan (throttled).
   const ws = await db.get("workerStatus", "main");
   const lastScan = ws?.lastScanAt;
-  if (!lastScan || Date.now() - new Date(lastScan).getTime() > SCAN_EVERY_MIN * 60_000) {
+  const runRequested = !!ws?.runRequestedAt && (!lastScan || ws.runRequestedAt > lastScan);
+  if (runRequested) await db.log("info", "run", "Starting the run you requested");
+  if (runRequested || !lastScan || Date.now() - new Date(lastScan).getTime() > SCAN_EVERY_MIN * 60_000) {
     const res = await scanAll(settings, { limitPerSource: Number(process.env.SCAN_LIMIT ?? 250) });
     let added = 0;
     for (const r of res.jobs) {

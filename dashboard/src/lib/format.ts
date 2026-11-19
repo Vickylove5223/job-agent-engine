@@ -40,7 +40,7 @@ export function isToday(iso?: string): boolean {
   return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth() && d.getDate() === n.getDate();
 }
 
-/** Worker is online if its heartbeat is less than 3 minutes old. */
+/** Worker is online if its heartbeat is less than 15 minutes old (cloud runs every 10 min). */
 export function isOnline(heartbeatAt?: string): boolean {
-  return !!heartbeatAt && Date.now() - new Date(heartbeatAt).getTime() < 3 * 60_000;
+  return !!heartbeatAt && Date.now() - new Date(heartbeatAt).getTime() < 15 * 60_000;
 }
