@@ -11,7 +11,8 @@ export function firestore(): Firestore {
   if (!getApps().length) {
     const sa = process.env.FIREBASE_SERVICE_ACCOUNT;
     const projectId = process.env.FIREBASE_PROJECT_ID;
-    if (sa) initializeApp({ credential: cert(JSON.parse(sa)) });
+    // Strip a UTF-8 byte-order mark (Windows tools add one) before parsing.
+    if (sa) initializeApp({ credential: cert(JSON.parse(sa.replace(/^﻿/, "").trim())) });
     else initializeApp(projectId ? { projectId } : undefined);
   }
   fs = getFirestore();
