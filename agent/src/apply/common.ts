@@ -1039,6 +1039,8 @@ export async function handleFileFields(ctx: Ctx, fields: DomField[]): Promise<No
  * below MIN_CONFIDENCE (or an empty / unmatchable answer), nothing is submitted: the caller gets
  * waiting_input with all such questions at once.
  */
+const CONSENT_LABEL = /(consent|privacy|personal data|data protection|gdpr|retain my data|recruitment policy|terms|i agree|processing of my)/i;
+
 export async function fillForm(
   ctx: Ctx,
   fields: DomField[],
@@ -1057,6 +1059,10 @@ export async function fillForm(
     if (f.value && !fromProfile && !opts.overwriteAll) {
       ctx.log(`keep prefilled "${f.label}" = ${f.value}`);
       continue;
+    }
+    // The user allowed ticking consent boxes that the form REQUIRES (never optional marketing ones).
+    if (!ans && f.required && f.kind === "checkbox" && ctx.input.acceptRequiredConsent && CONSENT_LABEL.test(f.label)) {
+      ans = { answer: "checked", confidence: 1, basis: ["settings.consent.acceptRequired (required consent)"] };
     }
     if (!ans) {
       try {
